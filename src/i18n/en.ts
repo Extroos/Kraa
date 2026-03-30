@@ -229,6 +229,7 @@ export const en = {
     paymentAmount: 'Payment Amount',
     exportCSV: 'Export Report (CSV)',
     clearCache: 'Clear Local History',
+    generateSchedule: 'Generate {year} Schedule',
   },
 
   // Expenses

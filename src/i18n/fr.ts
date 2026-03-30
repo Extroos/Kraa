@@ -226,6 +226,7 @@ export const fr: TranslationKeys = {
     paymentAmount: 'Montant du paiement',
     exportCSV: 'Exporter Rapport (CSV)',
     clearCache: 'Effacer l’historique local',
+    generateSchedule: 'Générer le calendrier {year}',
   },
 
   expenses: {

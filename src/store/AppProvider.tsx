@@ -267,28 +267,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         triggerDataSync();
       }
 
-      // 2. Generate Missing Payments for Current Year
-      const year = new Date().getFullYear();
-      for (const tenant of state.tenants) {
-        if (tenant.tenantStatus === 'archived') continue;
-        
-        const hasCurrentYear = state.payments.some(p => p.tenantId === tenant.id && p.year === year);
-        if (!hasCurrentYear) {
-          const generated = generatePaymentsForYear(tenant, year, effectiveOwnerId);
-          if (generated.length === 0) continue;
+      // 2. Generate Missing Payments for Current Year AND Next Year if late in the year (Smart Prep)
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const prepNextYear = now.getMonth() >= 8; // Start prepping for next year in September (Month 8)
+      
+      const yearsToGenerate = [currentYear];
+      if (prepNextYear) yearsToGenerate.push(currentYear + 1);
+
+      for (const year of yearsToGenerate) {
+        for (const tenant of state.tenants) {
+          if (tenant.tenantStatus === 'archived') continue;
           
-          const { writeBatch } = await import('firebase/firestore');
-          const batch = writeBatch(db);
-          let addedCount = 0;
-          
-          for (const payment of generated) {
-            const docRef = doc(db, FIREBASE_COLLECTIONS.PAYMENTS, payment.id);
-            batch.set(docRef, payment, { merge: true }); // merge: true = idempotent across multiple tabs
-            addedCount++;
-          }
-          
-          if (addedCount > 0) {
-            try { await batch.commit(); } catch (error) { console.error("Batch payment generation failed:", error); }
+          const hasYear = state.payments.some(p => p.tenantId === tenant.id && p.year === year);
+          if (!hasYear) {
+            const generated = generatePaymentsForYear(tenant, year, effectiveOwnerId, state.payments);
+            if (generated.length === 0) continue;
+            
+            const { writeBatch } = await import('firebase/firestore');
+            const batch = writeBatch(db);
+            let addedCount = 0;
+            
+            for (const payment of generated) {
+              const docRef = doc(db, FIREBASE_COLLECTIONS.PAYMENTS, payment.id);
+              batch.set(docRef, payment, { merge: true });
+              addedCount++;
+            }
+            
+            if (addedCount > 0) {
+              try { await batch.commit(); } catch (error) { console.error(`Batch payment generation for ${year} failed:`, error); }
+            }
           }
         }
       }
@@ -312,7 +320,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         imageUrl = await uploadPropertyImage(id, imageFile);
       }
       
-      const newProperty = { ...property, imageUrl, ownerId: effectiveOwnerId, createdAt: new Date().toISOString() };
+      const newProperty = { 
+        ...property, 
+        id: id,
+        imageUrl, 
+        ownerId: effectiveOwnerId, 
+        createdAt: new Date().toISOString() 
+      };
       await setDoc(doc(db, FIREBASE_COLLECTIONS.PROPERTIES, id), newProperty);
       
       // CRITICAL FIX: Refresh local state so it appears immediately
@@ -405,6 +419,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const id = uuidv4();
     const newTenant = { 
       ...tenant, 
+      id: id,
       tenantStatus: tenant.tenantStatus || 'active', 
       ownerId: effectiveOwnerId, 
       createdAt: new Date().toISOString(),
@@ -666,7 +681,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           transaction.set(statsRef, { id: effectiveOwnerId, totalCollected: finalPaidAmount, totalDue: -finalPaidAmount, lastUpdated: new Date().toISOString(), ownerId: effectiveOwnerId });
         }
       });
-      // triggerDataSync(); // Removed redundant sync trigger
+
+      // TRIGGER: Smart Payment-Linked Next Year Preparation
+      // If paying for a late-year month (Sept-Dec), ensure next year is ready
+      const paymentParts = paymentId.split('_');
+      if (paymentParts.length >= 3) {
+        const tId = paymentParts[0];
+        const pYear = parseInt(paymentParts[1], 10);
+        const pMonth = parseISO(paymentParts[2]).getMonth();
+        if (pMonth >= 8) { // If Sept-Dec
+          ensureYearlyPayments(tId, pYear + 1);
+        }
+      }
     } catch (error) { handleFirestoreError(error, OperationType.UPDATE, `${FIREBASE_COLLECTIONS.PAYMENTS}/${paymentId}`, user.uid, user.email); }
   };
 
@@ -1152,7 +1178,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addExpense = async (expense: Omit<Expense, 'id' | 'createdAt' | 'ownerId'>) => {
     if (!user || isReadOnly || !effectiveOwnerId) return;
     const id = uuidv4();
-    const newExpense = { ...expense, ownerId: effectiveOwnerId, createdAt: new Date().toISOString() };
+    const newExpense = { 
+      ...expense, 
+      id: id,
+      ownerId: effectiveOwnerId, 
+      createdAt: new Date().toISOString() 
+    };
     try {
       await runTransaction(db, async (transaction) => {
         const statsRef = doc(db, FIREBASE_COLLECTIONS.STATS, effectiveOwnerId);
@@ -1259,6 +1290,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const id = `${user.uid}___${cleanEmail}`;
       await setDoc(doc(db, FIREBASE_COLLECTIONS.LANDLORD_ACCESS, id), {
+        id: id,
         ownerId: user.uid,
         ownerEmail: user.email,
         landlordEmail: cleanEmail,

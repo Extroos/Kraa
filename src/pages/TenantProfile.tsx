@@ -450,7 +450,7 @@ export const TenantProfile: React.FC = () => {
                   <td colSpan={8} className="px-6 py-20 text-center">
                     <div className="flex flex-col items-center gap-4">
                       <p className="text-sm font-medium text-neutral-400">{t.tenantProfile.noPayments}</p>
-                      {selectedYear < currentYear - 1 && (
+                      {selectedYear < currentYear - 1 ? (
                         <Button 
                           variant="outline" 
                           size="sm"
@@ -463,6 +463,16 @@ export const TenantProfile: React.FC = () => {
                         >
                           <RotateCcw size={14} className="mr-2" />
                           {t.tenantProfile.loadHistorical || "Load Records from Cloud"}
+                        </Button>
+                      ) : selectedYear > currentYear && !isReadOnly && (
+                        <Button 
+                          variant="primary" 
+                          size="sm"
+                          onClick={() => ensureYearlyPayments(tenant.id, selectedYear)}
+                          className="bg-primary-600 hover:bg-primary-700 shadow-md transform active:scale-95 transition-all"
+                        >
+                          <Plus size={14} className={isRTL ? 'ml-2' : 'mr-2'} />
+                          {t.tenantProfile.generateSchedule || `Generate ${selectedYear} Schedule`}
                         </Button>
                       )}
                     </div>

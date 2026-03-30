@@ -226,6 +226,7 @@ export const ar: TranslationKeys = {
     paymentAmount: 'مبلغ الدفع',
     exportCSV: 'تصدير تقرير (CSV)',
     clearCache: 'مسح السجل المحلي',
+    generateSchedule: 'إنشاء جدول {year}',
   },
 
   expenses: {
