@@ -1,0 +1,67 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Authorization: Handles Doc doesn't exist, legacy docs (missing ownerId), or ownership matches
+    function isAuthorized() {
+      return isAuthenticated() && (
+        resource == null || 
+        !('ownerId' in resource.data) || 
+        resource.data.ownerId == request.auth.uid ||
+        isAuthorizedLandlord(resource.data.ownerId)
+      );
+    }
+
+    function isAuthorizedLandlord(ownerId) {
+      return isAuthenticated() && (
+        exists(/databases/$(database)/documents/landlord_access/$(ownerId + "___" + request.auth.token.email.lower()))
+      );
+    }
+
+    function isAdminLandlord(ownerId) {
+      let path = /databases/$(database)/documents/landlord_access/$(ownerId + "___" + request.auth.token.email.lower());
+      return isAuthenticated() && exists(path) && get(path).data.isAdmin == true;
+    }
+
+    // Default catch-all for any document
+    match /{document=**} {
+      allow read: if isAuthorized();
+      allow write: if isAuthenticated() && (
+        (resource == null && (request.resource.data.ownerId == request.auth.uid || isAdminLandlord(request.resource.data.ownerId))) || 
+        (resource != null && (resource.data.ownerId == request.auth.uid || isAdminLandlord(resource.data.ownerId)))
+      );
+    }
+    
+    // Stats specific rules (allow access to UID-based docs and legacy current doc)
+    match /stats/{statId} {
+      allow read, write: if isAuthenticated() && (
+        statId == request.auth.uid || 
+        statId == 'current' || 
+        isAuthorized()
+      );
+    }
+
+    // Landlord access specific rules (allow landlord to update their own activity heartbeat)
+    match /landlord_access/{accessId} {
+      allow read: if isAuthorized();
+      allow write: if isAuthenticated() && (
+        (resource == null && request.auth.uid == request.resource.data.ownerId) || 
+        (resource != null && resource.data.ownerId == request.auth.uid) ||
+        (resource != null && resource.data.landlordEmail == request.auth.token.email.lower())
+      );
+    }
+
+    // Activity logs: allow reading if authorized for that owner, and write if authenticated
+    match /activity_logs/{logId} {
+      allow read: if isAuthorized();
+      allow write: if isAuthenticated() && (
+        request.resource.data.ownerId == request.auth.uid || 
+        isAuthorizedLandlord(request.resource.data.ownerId)
+      );
+    }
+  }
+}

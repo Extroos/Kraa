@@ -1,0 +1,31 @@
+{
+  "css.customData": [".vscode/tailwind.json"],
+  "css.lint.unknownAtRules": "ignore",
+  "files.associations": {
+    "*.css": "tailwindcss"
+  },
+  "editor.quickSuggestions": {
+    "strings": "on"
+  },
+  "java.configuration.runtime": [
+    {
+      "name": "JavaSE-17",
+      "path": "C:\\Program Files\\Eclipse Adoptium\\jdk-17.0.17.10-hotspot",
+      "default": true
+    },
+    {
+      "name": "JavaSE-11",
+      "path": "C:\\Program Files\\Eclipse Adoptium\\jdk-11.0.29.7-hotspot"
+    }
+  ],
+  "java.jdt.ls.java.home": "C:\\Program Files\\Eclipse Adoptium\\jdk-17.0.17.10-hotspot",
+  "tailwindCSS.experimental.classRegex": [
+    ["@utility\\s+([^\\s{]+)", "([^\\s{]+)"]
+  ],
+  "tailwindCSS.includeLanguages": {
+    "typescript": "javascript",
+    "typescriptreact": "javascriptreact"
+  },
+  "java.configuration.updateBuildConfiguration": "interactive",
+  "java.import.gradle.java.home": "C:\\Program Files\\Eclipse Adoptium\\jdk-17.0.17.10-hotspot"
+}

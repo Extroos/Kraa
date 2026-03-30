@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "401470495679",
+    "project_id": "nazih-kra",
+    "storage_bucket": "nazih-kra.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:401470495679:android:bd843316f123e5890c5f0a",
+        "android_client_info": {
+          "package_name": "com.kraa.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "401470495679-07goo04ch37upuq3l3vcj76qg015fusf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCg_ByrRwr1a7w4YGheW6M0Uz2-I6eI34I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "401470495679-07goo04ch37upuq3l3vcj76qg015fusf.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

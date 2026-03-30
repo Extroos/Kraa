@@ -1,0 +1,141 @@
+@import "tailwindcss";
+
+@theme {
+  /* User Preferred Deep Navy Palette */
+  --color-primary-50: #f0f4f8;
+  --color-primary-100: #d1dfec;
+  --color-primary-200: #a3bfd9;
+  --color-primary-300: #759fc6;
+  --color-primary-400: #477fb3;
+  --color-primary-500: #1a5f9f; /* The preferred dark blue */
+  --color-primary-600: #154c7f;
+  --color-primary-700: #10395f;
+  --color-primary-800: #0a263f;
+  --color-primary-900: #051320;
+
+  /* Guest Mode Theme (Indigo) */
+  --guest-50: #eef2ff;
+  --guest-100: #e0e7ff;
+  --guest-500: #6366f1;
+  --guest-600: #4f46e5;
+  --guest-700: #4338ca;
+
+  --color-neutral-50: #f8fafc;
+  --color-neutral-100: #f1f5f9;
+  --color-neutral-200: #e2e8f0;
+  --color-neutral-300: #cbd5e1;
+  --color-neutral-400: #94a3b8;
+  --color-neutral-500: #64748b;
+  --color-neutral-600: #475569;
+  --color-neutral-700: #334155;
+  --color-neutral-800: #1e293b;
+  --color-neutral-900: #0f172a;
+
+  --color-success-500: #10b981;
+  --color-success-600: #059669;
+  --color-danger-500: #ef4444;
+  --color-danger-600: #dc2626;
+  --color-warning-500: #f59e0b;
+  --color-warning-600: #d97706;
+  
+  --success-50: #f0fdf4;
+  --success-500: #22c55e;
+  --success-600: #16a34a;
+
+  /* Typography */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  
+  --radius-sm: 4px; 
+  --radius-md: 6px;    /* 6px - Standard clean edge */
+  --radius-lg: 8px;    /* 8px - Box standard */
+  --radius-xl: 12px;   /* 12px - Maximum rounding for modal/drawer */
+}
+
+@layer base {
+  /* Globally hide scrollbars to enforce native aesthetic */
+  ::-webkit-scrollbar {
+    display: none;
+  }
+  * {
+    scrollbar-width: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Re-enable native typing selection for inputs */
+  input, textarea {
+    -webkit-user-select: auto;
+    user-select: auto;
+  }
+
+  html, body {
+    @apply h-full overflow-x-hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    scroll-behavior: smooth;
+    overscroll-behavior-y: none; /* Prevent rubber banding on certain mobile browsers */
+  }
+
+  body {
+    @apply antialiased text-neutral-900 bg-[#fbfcfd];
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* Safe Area Utilities (Edge-to-Edge Support) */
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 20px);
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 20px);
+  }
+  .px-safe {
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+  
+  /* Top/Bottom relative to safe area */
+  .top-safe {
+    top: env(safe-area-inset-top, 0px);
+  }
+  .bottom-safe {
+    bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .mt-safe {
+    margin-top: env(safe-area-inset-top, 0px);
+  }
+  .mb-safe {
+    margin-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply tracking-tight font-semibold text-neutral-900;
+  }
+}
+
+@layer components {
+  /* Mobile-specific scroll containers */
+  .mobile-scroll-x {
+    @apply overflow-x-auto overflow-y-hidden whitespace-nowrap scrollbar-none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Professional Mobile Transitions */
+  .mobile-drawer-animation {
+    @apply transition-transform duration-300 ease-in-out;
+  }
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+

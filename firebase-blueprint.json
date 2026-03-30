@@ -1,0 +1,88 @@
+{
+  "entities": {
+    "Property": {
+      "title": "Property",
+      "description": "A rental property",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "address": { "type": "string" },
+        "addressAr": { "type": "string" },
+        "city": { "type": "string" },
+        "notes": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "address", "city", "ownerId", "createdAt"]
+    },
+    "Tenant": {
+      "title": "Tenant",
+      "description": "A tenant renting a property",
+      "type": "object",
+      "properties": {
+        "propertyId": { "type": "string" },
+        "name": { "type": "string" },
+        "nameAr": { "type": "string" },
+        "phone": { "type": "string" },
+        "rentAmount": { "type": "number" },
+        "rentAmountArText": { "type": "string" },
+        "paymentCycle": { "type": "string", "enum": ["monthly", "3_months", "6_months", "yearly"] },
+        "startDate": { "type": "string", "format": "date-time" },
+        "tenantStatus": { "type": "string", "enum": ["active", "archived"] },
+        "archiveDate": { "type": "string", "format": "date-time" },
+        "notes": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["propertyId", "name", "phone", "rentAmount", "paymentCycle", "startDate", "ownerId", "createdAt"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "A payment record for a tenant",
+      "type": "object",
+      "properties": {
+        "tenantId": { "type": "string" },
+        "amount": { "type": "number" },
+        "periodStart": { "type": "string", "format": "date-time" },
+        "periodEnd": { "type": "string", "format": "date-time" },
+        "year": { "type": "number" },
+        "datePaid": { "type": "string", "format": "date-time" },
+        "paymentMethod": { "type": "string", "enum": ["cash", "bank_transfer", "cheque"] },
+        "notes": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["tenantId", "amount", "periodStart", "periodEnd", "year", "ownerId", "createdAt"]
+    },
+    "Receipt": {
+      "title": "Receipt",
+      "description": "A generated receipt for a payment",
+      "type": "object",
+      "properties": {
+        "paymentId": { "type": "string" },
+        "receiptNumber": { "type": "number" },
+        "printedAt": { "type": "string", "format": "date-time" },
+        "ownerId": { "type": "string" }
+      },
+      "required": ["paymentId", "receiptNumber", "printedAt", "ownerId"]
+    }
+  },
+  "firestore": {
+    "/properties/{propertyId}": {
+      "schema": { "$ref": "#/entities/Property" },
+      "description": "Stores properties"
+    },
+    "/tenants/{tenantId}": {
+      "schema": { "$ref": "#/entities/Tenant" },
+      "description": "Stores tenants"
+    },
+    "/payments/{paymentId}": {
+      "schema": { "$ref": "#/entities/Payment" },
+      "description": "Stores payments"
+    },
+    "/receipts/{receiptId}": {
+      "schema": { "$ref": "#/entities/Receipt" },
+      "description": "Stores generated receipts"
+    }
+  }
+}
