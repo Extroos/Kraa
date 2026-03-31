@@ -502,11 +502,32 @@ export const ReceiptPreview: React.FC = () => {
       onClick={handleBackgroundClick}
     >
       <style>{`
+        * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        @page { 
+          size: ${displayLayout.pageSize?.width || 165}mm ${displayLayout.pageSize?.height || 103}mm; 
+          margin: 0 !important; 
+        }
         @media print {
-          @page { size: ${displayLayout.pageSize?.width || 165}mm ${displayLayout.pageSize?.height || 103}mm; margin: 0; }
-          body { margin: 0 !important; padding: 0 !important; background: white !important; }
-          .print-container { position: absolute !important; top: 0 !important; left: 0 !important; margin: 0 !important; width: ${displayLayout.pageSize?.width || 165}mm !important; height: ${displayLayout.pageSize?.height || 103}mm !important; overflow: visible; background: white; page-break-after: avoid; page-break-before: avoid; }
-          nav, header, aside, .designer-controls, .designer-overlay, .background-guide { display: none !important; }
+          html, body { 
+            display: block !important;
+            width: ${displayLayout.pageSize?.width || 165}mm !important; 
+            height: ${displayLayout.pageSize?.height || 103}mm !important; 
+            margin: 0 !important; 
+            padding: 0 !important; 
+            overflow: hidden !important;
+          }
+          .print-container { 
+            position: absolute !important; 
+            top: 0 !important; 
+            left: 0 !important; 
+            margin: 0 !important; 
+            width: ${displayLayout.pageSize?.width || 165}mm !important; 
+            height: ${displayLayout.pageSize?.height || 103}mm !important; 
+            box-shadow: none !important;
+            border: none !important;
+            background: white !important;
+          }
+          nav, header, aside, .designer-controls, .designer-overlay, .background-guide, .no-print { display: none !important; }
         }
         @media screen {
           .print-container { position: relative; width: ${displayLayout.pageSize?.width || 165}mm; height: ${displayLayout.pageSize?.height || 103}mm; background: white; margin: auto; border: 1px solid #d1d5db; shadow-sm; overflow: visible; z-index: 10; }
@@ -692,9 +713,11 @@ export const ReceiptPreview: React.FC = () => {
       <div className={`w-full flex-1 flex flex-col items-center pt-16 sm:pt-4 ${!isZoomed && !isDesigning ? 'overflow-hidden' : ''}`}>
         {/* Sliding Viewport for Horizontal Support & Centering */}
         <div className={`w-full max-w-full moving-viewport ${isDesigning ? 'designer-active-viewport' : ''}`}>
+          
           <div 
-            className="print-container relative shrink-0 transition-all duration-300 ease-out origin-top" 
+            className="print-container flex-shrink-0 transition-all duration-300 ease-out origin-top" 
             dir="ltr" 
+            id="receipt-doc"
             ref={containerRef}
             style={{ 
               boxShadow: '0 25px 50px -12px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05)',
