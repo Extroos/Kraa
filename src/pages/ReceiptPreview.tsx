@@ -515,9 +515,10 @@ export const ReceiptPreview: React.FC = () => {
             margin: 0 !important; 
             padding: 0 !important; 
             overflow: hidden !important;
+            background: white !important;
           }
           .print-container { 
-            position: absolute !important; 
+            position: fixed !important; 
             top: 0 !important; 
             left: 0 !important; 
             margin: 0 !important; 
@@ -526,6 +527,9 @@ export const ReceiptPreview: React.FC = () => {
             box-shadow: none !important;
             border: none !important;
             background: white !important;
+            page-break-after: avoid; 
+            page-break-before: avoid; 
+            z-index: 99999 !important;
           }
           nav, header, aside, .designer-controls, .designer-overlay, .background-guide, .no-print { display: none !important; }
         }
