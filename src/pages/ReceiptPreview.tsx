@@ -506,7 +506,7 @@ export const ReceiptPreview: React.FC = () => {
           @page { size: ${displayLayout.pageSize?.width || 165}mm ${displayLayout.pageSize?.height || 103}mm; margin: 0; }
           body { margin: 0; padding: 0; background: white; }
           .print-container { position: relative; width: ${displayLayout.pageSize?.width || 165}mm; height: ${displayLayout.pageSize?.height || 103}mm; overflow: visible; background: white; page-break-after: avoid; page-break-before: avoid; }
-          nav, header, aside, .designer-controls, .designer-overlay { display: none !important; }
+          nav, header, aside, .designer-controls, .designer-overlay, .background-guide { display: none !important; }
         }
         @media screen {
           .print-container { position: relative; width: ${displayLayout.pageSize?.width || 165}mm; height: ${displayLayout.pageSize?.height || 103}mm; background: white; margin: auto; border: 1px solid #d1d5db; shadow-sm; overflow: visible; z-index: 10; }
@@ -702,9 +702,9 @@ export const ReceiptPreview: React.FC = () => {
               borderRadius: '2px', // Slight radius for card feel
             }}
           >
-            {/* Background Image Layer */}
+            {/* Background Image Layer - High Stability Guide */}
             <div 
-                className={`absolute select-none overflow-hidden ${isDesigning ? 'opacity-40' : 'opacity-0 print:opacity-100'}`}
+                className={`absolute select-none overflow-hidden background-guide print:hidden ${isDesigning ? 'opacity-40' : 'opacity-25'}`}
                 style={{
                     left: `${displayLayout.bgPosition?.x || 0}mm`,
                     top: `${displayLayout.bgPosition?.y || 0}mm`,
