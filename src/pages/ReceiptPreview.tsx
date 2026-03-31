@@ -504,23 +504,24 @@ export const ReceiptPreview: React.FC = () => {
       <style>{`
         * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         @page { 
-          size: ${displayLayout.pageSize?.width || 165}mm ${displayLayout.pageSize?.height || 103}mm; 
+          size: auto; 
           margin: 0 !important; 
         }
         @media print {
           html, body { 
             display: block !important;
-            width: ${displayLayout.pageSize?.width || 165}mm !important; 
-            height: ${displayLayout.pageSize?.height || 103}mm !important; 
+            width: 100% !important; 
+            height: 100% !important; 
             margin: 0 !important; 
             padding: 0 !important; 
-            overflow: hidden !important;
+            overflow: visible !important;
             background: white !important;
           }
           .print-container { 
-            position: fixed !important; 
-            top: 0 !important; 
+            position: absolute !important; 
+            top: 50% !important; 
             left: 0 !important; 
+            transform: translateY(-50%) !important; 
             margin: 0 !important; 
             width: ${displayLayout.pageSize?.width || 165}mm !important; 
             height: ${displayLayout.pageSize?.height || 103}mm !important; 
@@ -529,7 +530,6 @@ export const ReceiptPreview: React.FC = () => {
             background: white !important;
             page-break-after: avoid; 
             page-break-before: avoid; 
-            z-index: 99999 !important;
           }
           nav, header, aside, .designer-controls, .designer-overlay, .background-guide, .no-print { display: none !important; }
         }
