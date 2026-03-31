@@ -25,7 +25,16 @@ export interface Property {
   imageUrl?: string;
   ownerId: string;
   createdAt: string;
+  folderId?: string;
 }
+
+export interface PropertyFolder {
+  id: string;
+  name: string;
+  ownerId: string;
+  createdAt: string;
+}
+
 
 export interface Tenant {
   id: string;
@@ -48,6 +57,7 @@ export interface Tenant {
   totalDebt?: number; // Cumulative across all payments
   lastPaymentDate?: string;
   lastReceiptSequence?: number;
+  paymentDay?: 'first' | 'end';
 }
 
 export interface Payment {

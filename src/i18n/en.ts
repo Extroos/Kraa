@@ -99,6 +99,17 @@ export const en = {
     villa: 'Villa',
     garage: 'Garage',
     house: 'House',
+    collections: 'Collections',
+    allAssets: 'All Assets',
+    newFolder: 'New Collection',
+    editFolder: 'Edit Collection',
+    deleteFolder: 'Delete Collection',
+    moveToFolder: 'Move to Collection',
+    noFolders: 'No collections created',
+    folderName: 'Collection Name',
+    confirmDeleteFolder: 'Are you sure you want to delete this collection? Properties will not be deleted.',
+    addAssets: 'Select Properties',
+    inOtherFolder: 'In another collection',
   },
 
   // Tenants

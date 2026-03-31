@@ -34,6 +34,7 @@ export const TenantFormModal: React.FC<TenantFormModalProps> = ({
     paymentCycle: 'monthly' as PaymentCycle,
     startDate: format(new Date(), APP_CONFIG.DATE_FORMAT),
     notes: '',
+    paymentDay: 'first' as 'first' | 'end',
   });
 
   useEffect(() => {
@@ -51,6 +52,7 @@ export const TenantFormModal: React.FC<TenantFormModalProps> = ({
           return isValid(d) ? format(d, APP_CONFIG.DATE_FORMAT) : format(new Date(), APP_CONFIG.DATE_FORMAT);
         })(),
         notes: editingTenant.notes || '',
+        paymentDay: editingTenant.paymentDay || 'first',
       });
     } else {
       setFormData({
@@ -63,6 +65,7 @@ export const TenantFormModal: React.FC<TenantFormModalProps> = ({
         paymentCycle: 'monthly',
         startDate: format(new Date(), APP_CONFIG.DATE_FORMAT),
         notes: '',
+        paymentDay: 'first',
       });
     }
   }, [editingTenant, properties, isOpen]);
@@ -197,7 +200,7 @@ export const TenantFormModal: React.FC<TenantFormModalProps> = ({
           />
         </div>
 
-        <div className="grid grid-cols-1 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input
             label={t.tenants.startDateLabel}
             required
@@ -205,6 +208,18 @@ export const TenantFormModal: React.FC<TenantFormModalProps> = ({
             value={formData.startDate}
             onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
           />
+          <div>
+            <label className="block text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1.5">Payment Schedule</label>
+            <select
+              required
+              value={formData.paymentDay}
+              onChange={(e) => setFormData({ ...formData, paymentDay: e.target.value as any })}
+              className="w-full h-10 px-3 bg-neutral-50 border border-neutral-200 rounded text-xs font-bold uppercase tracking-wider focus:border-primary-500 outline-none transition-colors cursor-pointer"
+            >
+              <option value="first">First of the Month</option>
+              <option value="end">End of the Month</option>
+            </select>
+          </div>
         </div>
 
         <TextArea

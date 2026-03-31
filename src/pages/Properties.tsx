@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Card, Button } from '../components/ui';
 import { 
   Home, 
@@ -11,13 +11,17 @@ import {
   Edit2, 
   Trash2,
   ChevronRight,
-  Building2,
-  Warehouse,
-  HomeIcon,
-  Tent
+  FolderPlus,
+  Folder,
+  Filter,
+  Inbox,
+  MoreVertical,
+  LayoutGrid
 } from 'lucide-react';
-import { Property } from '../types';
+import { Property, PropertyFolder } from '../types';
 import { PropertyFormModal } from '../components/PropertyFormModal';
+import { FolderFormModal } from '../components/FolderFormModal';
+import { MoveToFolderModal } from '../components/MoveToFolderModal';
 import { useAuth } from '../store/AuthContext';
 import { useAppContext } from '../hooks/useAppContext';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -29,7 +33,6 @@ import { useTranslation } from '../i18n';
 const getPropertyImage = (type?: string, customImage?: string) => {
   if (customImage) return customImage;
   
-  // Note: These keys might be in Arabic (historical) or English (new)
   switch (type) {
     case 'شقة':
     case 'Apartment':
@@ -50,26 +53,64 @@ const getPropertyImage = (type?: string, customImage?: string) => {
 };
 
 export const Properties: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, isRTL } = useTranslation();
   const { isReadOnly } = useAuth();
-  const { properties, tenants, addProperty, updateProperty, deleteProperty, privacyMode, getTenantsWithStatus } = useAppContext();
+  const { 
+    properties, 
+    tenants, 
+    folders,
+    addProperty, 
+    updateProperty, 
+    deleteProperty, 
+    addFolder,
+    updateFolder,
+    deleteFolder,
+    assignPropertyToFolder,
+    updateFolderWithProperties,
+    privacyMode, 
+    getTenantsWithStatus 
+  } = useAppContext();
   const navigate = useNavigate();
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  // Modals state
+  const [isPropertyModalOpen, setIsPropertyModalOpen] = useState(false);
   const [editingProperty, setEditingProperty] = useState<Property | undefined>(undefined);
+  
+  const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
+  const [editingFolder, setEditingFolder] = useState<PropertyFolder | undefined>(undefined);
+  
+  const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
+  const [propertyToMove, setPropertyToMove] = useState<Property | null>(null);
+
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [propertyToDelete, setPropertyToDelete] = useState<{ id: string; name: string } | null>(null);
 
+  const [folderDeleteModalOpen, setFolderDeleteModalOpen] = useState(false);
+  const [folderToDelete, setFolderToDelete] = useState<PropertyFolder | null>(null);
+
+  // Filter state
+  const [selectedFolderId, setSelectedFolderId] = useState<string | 'all'>('all');
+
   const tenantsWithStatus = getTenantsWithStatus();
 
-  const handleOpenModal = (property?: Property) => {
+  const filteredProperties = useMemo(() => {
+    if (selectedFolderId === 'all') return properties;
+    return properties.filter(p => p.folderId === selectedFolderId);
+  }, [properties, selectedFolderId]);
+
+  const handleOpenPropertyModal = (property?: Property) => {
     setEditingProperty(property);
-    setIsModalOpen(true);
+    setIsPropertyModalOpen(true);
   };
 
-  const handleCloseModal = () => {
-    setEditingProperty(undefined);
-    setIsModalOpen(false);
+  const handleOpenFolderModal = (folder?: PropertyFolder) => {
+    setEditingFolder(folder);
+    setIsFolderModalOpen(true);
+  };
+
+  const handleOpenMoveModal = (property: Property) => {
+    setPropertyToMove(property);
+    setIsMoveModalOpen(true);
   };
 
   const handleSaveProperty = async (data: any, imageFile?: File) => {
@@ -79,9 +120,18 @@ export const Properties: React.FC = () => {
       } else {
         await addProperty(data, imageFile);
       }
-      handleCloseModal();
+      setIsPropertyModalOpen(false);
     } catch (err) {
       console.error("Failed to save property:", err);
+    }
+  };
+
+  const handleSaveFolder = async (name: string, propertyIds: string[]) => {
+    try {
+      await updateFolderWithProperties(editingFolder?.id || null, name, propertyIds);
+      setIsFolderModalOpen(false);
+    } catch (err) {
+      console.error("Failed to save folder:", err);
     }
   };
 
@@ -90,11 +140,23 @@ export const Properties: React.FC = () => {
     setDeleteModalOpen(true);
   };
 
-  const confirmDelete = async () => {
+  const handleFolderDeleteClick = (folder: PropertyFolder) => {
+    setFolderToDelete(folder);
+    setFolderDeleteModalOpen(true);
+  };
+
+  const confirmDeleteProperty = async () => {
     if (propertyToDelete) {
       await deleteProperty(propertyToDelete.id);
       setDeleteModalOpen(false);
-      setPropertyToDelete(null);
+    }
+  };
+
+  const confirmDeleteFolder = async () => {
+    if (folderToDelete) {
+      await deleteFolder(folderToDelete.id);
+      if (selectedFolderId === folderToDelete.id) setSelectedFolderId('all');
+      setFolderDeleteModalOpen(false);
     }
   };
 
@@ -113,235 +175,362 @@ export const Properties: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500 pb-12">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6 border-b border-neutral-200 pb-8 rtl:flex-row-reverse">
-        <div className="rtl:text-right">
-          <h1 className="text-3xl sm:text-4xl font-black text-neutral-900 tracking-tight leading-none mb-2">{t.properties.title}</h1>
-          <p className="text-xs font-bold text-neutral-400 uppercase tracking-[0.25em]">{t.properties.subtitle}</p>
-        </div>
-        {!isReadOnly && (
-          <Button 
-            onClick={() => handleOpenModal()} 
-            className="bg-neutral-900 text-white hover:bg-black px-6 h-11 rounded-lg shadow-sm flex items-center gap-2 transition-transform active:scale-95"
-          >
-            <Plus size={20} /> 
-            <span className="font-bold uppercase tracking-widest text-[11px]">{t.properties.addAsset}</span>
-          </Button>
-        )}
-      </div>
+    <div className="max-w-7xl mx-auto animate-in fade-in duration-500 pb-12">
+      <div className={`flex flex-col lg:flex-row gap-8 ${isRTL ? 'lg:flex-row-reverse' : ''}`}>
+        
+        {/* Sidebar - Collections */}
+        <div className="w-full lg:w-72 shrink-0">
+          <div className="bg-white border border-neutral-100 rounded-3xl p-6 shadow-sm sticky top-24">
+            <div className={`flex items-center justify-between mb-8 ${isRTL ? 'flex-row-reverse' : ''}`}>
+              <div className={`flex items-center gap-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
+                <Filter className="w-5 h-5 text-neutral-900" />
+                <h2 className="text-sm font-black uppercase tracking-widest text-neutral-900">{t.properties.collections}</h2>
+              </div>
+              {!isReadOnly && (
+                <button 
+                  onClick={() => handleOpenFolderModal()}
+                  className="p-1.5 hover:bg-neutral-50 rounded-lg text-neutral-400 hover:text-neutral-900 transition-all"
+                  title={t.properties.newFolder}
+                >
+                  <FolderPlus size={18} />
+                </button>
+              )}
+            </div>
 
-      {properties.length === 0 ? (
-        <Card className="text-center py-16 bg-white border-2 border-dashed border-neutral-100 rounded-xl">
-          <h2 className="text-xl font-black text-neutral-900 uppercase tracking-widest mb-3">{t.properties.noProperties}</h2>
-          <p className="text-sm font-medium text-neutral-400 mb-8 max-w-sm mx-auto">{t.properties.noPropertiesDesc}</p>
-          {!isReadOnly && (
-            <Button onClick={() => handleOpenModal()} className="px-8 h-11 rounded-lg">
-              <Plus className="w-5 h-5 rtl:ml-3 ltr:mr-3" /> {t.properties.addProperty}
-            </Button>
-          )}
-        </Card>
-      ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6">
-          {properties.map((property) => {
-            const activeTenant = getActiveTenantForProperty(property.id);
-            const archivedCount = getArchivedTenantsForProperty(property.id);
-            const totalRent = calculateTotalPropertyRent(property.id);
-
-            return (
-              <Card 
-                key={property.id} 
-                className="group border border-neutral-100 shadow-sm bg-white rounded-lg overflow-hidden flex flex-col h-full"
-                padding={false}
+            <nav className="space-y-1.5">
+              <button
+                onClick={() => setSelectedFolderId('all')}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all group ${
+                  selectedFolderId === 'all' 
+                    ? 'bg-neutral-900 text-white shadow-xl shadow-neutral-900/10' 
+                    : 'hover:bg-neutral-50 text-neutral-500'
+                }`}
               >
-                {/* Visual Header - Hidden on Mobile */}
-                <div className="relative h-32 lg:h-44 overflow-hidden bg-neutral-100 hidden sm:block">
-                  <img 
-                    src={getPropertyImage(property.type, property.imageUrl)} 
-                    alt={property.name}
-                    className="w-full h-full object-cover transition-all duration-700 group-hover:scale-105"
-                  />
-                  
-                  {/* Property Type Badge - Mature White/Black Design */}
-                  <div className="absolute top-4 right-4 z-10 rtl:right-auto rtl:left-4">
-                    <span className="bg-white/90 backdrop-blur-sm border border-neutral-200 text-neutral-900 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest">
-                      {t.expenses[property.type as keyof typeof t.expenses] || property.type || t.nav.asset}
-                    </span>
-                  </div>
-
-                   {/* Quick Actions overlay - Classic Buttons */}
-                    <div className="absolute top-4 left-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 rtl:left-auto rtl:right-4">
-                      <Button
-                        size="sm"
-                        onClick={(e) => { e.stopPropagation(); handleOpenModal(property); }}
-                        className="w-10 h-10 p-0 rounded-lg bg-neutral-900 text-white shadow-sm hover:bg-black transition-colors"
-                        title={t.common.edit}
-                      >
-                        <Edit2 size={24} className="text-white" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={(e) => { e.stopPropagation(); handleDeleteClick(property.id, property.name); }}
-                        className="w-10 h-10 p-0 rounded-lg bg-danger-50 border border-danger-100 text-danger-400 hover:bg-danger-600 hover:text-white transition-all shadow-sm"
-                        title={t.common.delete}
-                      >
-                        <Trash2 size={24} />
-                      </Button>
-                    </div>
-
-                  <div className="absolute bottom-0 inset-x-0 h-1/2 bg-linear-to-t from-black/60 to-transparent pointer-events-none" />
-                  
-                  <div className="absolute bottom-3 left-3 text-white rtl:left-auto rtl:right-3 rtl:text-right">
-                    <h2 className="text-sm font-bold leading-tight drop-shadow-md tracking-tight uppercase line-clamp-1">{property.name}</h2>
-                    <div className="flex items-center gap-1 opacity-80 rtl:flex-row-reverse">
-                      <MapPin size={10} className="shrink-0" />
-                      <span className="text-[9px] font-bold uppercase tracking-wider truncate max-w-[150px] drop-shadow-sm">{property.address}</span>
-                    </div>
-                  </div>
+                <div className={`flex items-center gap-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
+                  <Inbox size={18} className={selectedFolderId === 'all' ? 'text-white' : 'text-neutral-400 group-hover:text-neutral-900'} />
+                  <span className="font-bold uppercase tracking-widest text-[10px]">{t.properties.allAssets}</span>
                 </div>
+                <span className={`text-[10px] font-black tabular-nums ${selectedFolderId === 'all' ? 'text-white/60' : 'text-neutral-300'}`}>
+                  {properties.length}
+                </span>
+              </button>
 
-                {/* Information Body */}
-                <div className="p-3 sm:p-5 flex-1 flex flex-col">
-                  <div className="flex-1">
-                    {/* Mobile Title Section */}
-                    <div className="sm:hidden mb-2 flex items-start justify-between gap-1 rtl:flex-row-reverse">
-                      <div className="min-w-0 rtl:text-right">
-                        <h2 className="text-xs font-bold text-neutral-900 tracking-tight uppercase leading-tight truncate">{property.name}</h2>
-                        <p className="text-[8px] text-neutral-400 font-bold uppercase tracking-wider truncate opacity-70">{property.address}</p>
+              <div className="pt-4 pb-2">
+                <div className={`h-px bg-neutral-50 w-full mb-4`} />
+              </div>
+
+              {folders.map(folder => {
+                const count = properties.filter(p => p.folderId === folder.id).length;
+                return (
+                  <div key={folder.id} className="relative group">
+                    <button
+                      onClick={() => setSelectedFolderId(folder.id)}
+                      className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all ${
+                        selectedFolderId === folder.id 
+                          ? 'bg-neutral-900 text-white shadow-xl shadow-neutral-900/10' 
+                          : 'hover:bg-neutral-50 text-neutral-500'
+                      }`}
+                    >
+                      <div className={`flex items-center gap-3 ${isRTL ? 'flex-row-reverse' : ''} overflow-hidden`}>
+                        <Folder size={18} className={selectedFolderId === folder.id ? 'text-white' : 'text-neutral-400 group-hover:text-neutral-900'} />
+                        <span className="font-bold uppercase tracking-widest text-[10px] truncate">{folder.name}</span>
                       </div>
-                      {!isReadOnly && (
-                        <div className="flex gap-1 shrink-0 px-1">
+                      <span className={`text-[10px] font-black tabular-nums ${selectedFolderId === folder.id ? 'text-white/60' : 'text-neutral-300'}`}>
+                        {count}
+                      </span>
+                    </button>
+                    {!isReadOnly && (
+                      <div className={`absolute top-1/2 -translate-y-1/2 ${isRTL ? 'left-2' : 'right-2'} opacity-0 group-hover:opacity-100 transition-opacity flex gap-1`}>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleOpenFolderModal(folder); }}
+                          className={`p-1 rounded hover:bg-white/10 ${selectedFolderId === folder.id ? 'text-white/50' : 'text-neutral-300'}`}
+                        >
+                          <Edit2 size={12} />
+                        </button>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleFolderDeleteClick(folder); }}
+                          className={`p-1 rounded hover:bg-danger-500/10 ${selectedFolderId === folder.id ? 'text-danger-400' : 'text-neutral-300 hover:text-danger-500'}`}
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {folders.length === 0 && (
+                <div className="py-8 text-center bg-neutral-50/20 rounded-2xl border border-dashed border-neutral-100 p-4">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-neutral-400 leading-tight">
+                    {t.properties.noFolders}
+                  </p>
+                </div>
+              )}
+            </nav>
+          </div>
+        </div>
+
+        {/* Main Content - Grid */}
+        <div className="flex-1 space-y-8">
+          {/* Page Header */}
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6 pb-2 rtl:flex-row-reverse">
+            <div className="rtl:text-right">
+              <h1 className="text-3xl sm:text-4xl font-black text-neutral-900 tracking-tight leading-none mb-2">
+                {selectedFolderId === 'all' 
+                  ? t.properties.title 
+                  : folders.find(f => f.id === selectedFolderId)?.name}
+              </h1>
+              <p className="text-xs font-bold text-neutral-400 uppercase tracking-[0.25em]">
+                {selectedFolderId === 'all' ? t.properties.subtitle : `${filteredProperties.length} ${t.nav.properties}`}
+              </p>
+            </div>
+            {!isReadOnly && (
+              <Button 
+                onClick={() => handleOpenPropertyModal()} 
+                className="bg-neutral-900 text-white hover:bg-black px-6 h-11 rounded-xl shadow-lg flex items-center gap-2 transition-transform active:scale-95"
+              >
+                <Plus size={20} /> 
+                <span className="font-bold uppercase tracking-widest text-[11px]">{t.properties.addAsset}</span>
+              </Button>
+            )}
+          </div>
+
+          {filteredProperties.length === 0 ? (
+            <Card className="text-center py-20 bg-white border border-neutral-100 rounded-3xl shadow-sm">
+              <div className="w-16 h-16 bg-neutral-50 rounded-2xl flex items-center justify-center mx-auto mb-6 text-neutral-300">
+                <LayoutGrid size={32} />
+              </div>
+              <h2 className="text-xl font-black text-neutral-900 uppercase tracking-widest mb-3">{t.properties.noProperties}</h2>
+              <p className="text-sm font-medium text-neutral-400 mb-8 max-w-sm mx-auto">{t.properties.noPropertiesDesc}</p>
+              {!isReadOnly && (
+                <Button onClick={() => handleOpenPropertyModal()} className="px-8 h-11 rounded-xl shadow-lg">
+                  <Plus className="w-5 h-5 rtl:ml-3 ltr:mr-3" /> {t.properties.addProperty}
+                </Button>
+              )}
+            </Card>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-6">
+              {filteredProperties.map((property) => {
+                const activeTenant = getActiveTenantForProperty(property.id);
+                const archivedCount = getArchivedTenantsForProperty(property.id);
+                const totalRent = calculateTotalPropertyRent(property.id);
+
+                return (
+                  <Card 
+                    key={property.id} 
+                    className="group border border-neutral-100 shadow-sm bg-white rounded-2xl sm:rounded-3xl overflow-hidden flex flex-col h-full hover:shadow-xl transition-all duration-300"
+                    padding={false}
+                  >
+                    {/* Visual Header - Hidden on mobile for compact view */}
+                    <div className="relative hidden sm:block sm:h-56 overflow-hidden bg-neutral-100">
+                      <img 
+                        src={getPropertyImage(property.type, property.imageUrl)} 
+                        alt={property.name}
+                        className="w-full h-full object-cover transition-all duration-1000 group-hover:scale-105"
+                      />
+                      
+                      {/* Property Type Badge */}
+                      <div className="absolute top-4 right-4 z-10 rtl:right-auto rtl:left-4">
+                        <span className="bg-white/80 backdrop-blur-md border border-white/20 text-neutral-900 px-3 py-1 rounded-full shadow-lg text-[9px] font-black uppercase tracking-widest">
+                          {t.expenses[property.type as keyof typeof t.expenses] || property.type || t.nav.asset}
+                        </span>
+                      </div>
+
+                      {/* Quick Actions overlay */}
+                      <div className="absolute top-4 left-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 rtl:left-auto rtl:right-4 z-10">
+                        <Button
+                          size="sm"
+                          onClick={(e) => { e.stopPropagation(); handleOpenPropertyModal(property); }}
+                          className="w-10 h-10 p-0 rounded-xl bg-black/60 backdrop-blur-md text-white border border-white/10 shadow-xl hover:bg-black transition-all transform hover:scale-110"
+                        >
+                          <Edit2 size={20} className="text-white" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={(e) => { e.stopPropagation(); handleOpenMoveModal(property); }}
+                          className="w-10 h-10 p-0 rounded-xl bg-black/60 backdrop-blur-md text-white border border-white/10 shadow-xl hover:bg-black transition-all transform hover:scale-110"
+                          title={t.properties.moveToFolder}
+                        >
+                          <Folder size={20} className="text-white" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={(e) => { e.stopPropagation(); handleDeleteClick(property.id, property.name); }}
+                          className="w-10 h-10 p-0 rounded-xl bg-danger-600/90 backdrop-blur-md text-white border border-danger-400/20 shadow-xl hover:bg-danger-700 transition-all transform hover:scale-110"
+                        >
+                          <Trash2 size={20} className="text-white" />
+                        </Button>
+                      </div>
+
+                      <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
+                      
+                      <div className="absolute bottom-5 left-5 right-5 text-white rtl:text-right">
+                        <h2 className="text-xl font-black leading-tight tracking-tight uppercase line-clamp-1 mb-1 shadow-sm">{property.name}</h2>
+                        <div className="flex items-center gap-2 opacity-90 rtl:flex-row-reverse">
+                          <MapPin size={14} className="shrink-0 text-white" />
+                          <span className="text-[10px] font-bold uppercase tracking-widest truncate">{property.address}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Mobile Title Bar (only visible on mobile) */}
+                    <div className="block sm:hidden p-2.5 border-b border-neutral-50 bg-neutral-50/30">
+                       <div className="flex items-center justify-between gap-2 rtl:flex-row-reverse">
+                        <h2 className="text-[10px] font-black leading-tight tracking-tight uppercase truncate flex-1">{property.name}</h2>
+                        <div className="flex gap-1 shrink-0">
                           <button 
-                            onClick={(e) => { e.stopPropagation(); handleOpenModal(property); }}
-                            className="w-7 h-7 flex items-center justify-center text-neutral-400 hover:text-neutral-900 transition-colors"
+                            onClick={(e) => { e.stopPropagation(); handleOpenPropertyModal(property); }}
+                            className="p-1.5 bg-white rounded-lg border border-neutral-100 text-neutral-400 shadow-sm active:bg-neutral-50 transition-colors"
                           >
-                            <Edit2 size={16} />
+                            <Edit2 size={12} />
+                          </button>
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); handleOpenMoveModal(property); }}
+                            className="p-1.5 bg-white rounded-lg border border-neutral-100 text-neutral-400 shadow-sm active:bg-neutral-50 transition-colors"
+                          >
+                            <Folder size={12} />
                           </button>
                           <button 
                             onClick={(e) => { e.stopPropagation(); handleDeleteClick(property.id, property.name); }}
-                            className="w-7 h-7 flex items-center justify-center text-neutral-300 hover:text-danger-500 transition-colors"
+                            className="p-1.5 bg-white rounded-lg border border-neutral-100 text-danger-500 shadow-sm active:bg-danger-50 transition-colors"
                           >
-                            <Trash2 size={16} />
+                            <Trash2 size={12} />
                           </button>
                         </div>
-                      )}
+                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 sm:gap-6 mb-3 sm:mb-6 items-baseline">
-                      <div className="space-y-0.5 rtl:text-right text-left">
-                        <span className="text-[8px] sm:text-[11px] font-bold text-neutral-400 uppercase tracking-widest block opacity-60 leading-none">{t.properties.monthlyYield}</span>
-                        <div className="flex items-baseline gap-0.5 rtl:flex-row-reverse">
-                          <span className="text-sm sm:text-2xl font-bold text-neutral-900 tabular-nums tracking-tighter">
-                            {privacyMode ? '*****' : `${totalRent.toLocaleString()}`}
-                          </span>
-                          <span className="text-[8px] sm:text-xs font-bold text-neutral-400 uppercase opacity-60">{APP_CONFIG.CURRENCY}</span>
-                        </div>
-                      </div>
-                      <div className="space-y-0.5 text-right rtl:text-left">
-                        <span className="text-[8px] sm:text-[11px] font-bold text-neutral-400 uppercase tracking-widest block opacity-60 leading-none">{t.properties.locality}</span>
-                        <span className="text-[11px] sm:text-xl font-bold text-neutral-800 tabular-nums uppercase truncate block leading-tight">{property.city || '---'}</span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5 pt-2 border-t border-neutral-50 mt-2">
-                      <span className="text-[8px] sm:text-[11px] font-bold text-neutral-400 uppercase tracking-widest block rtl:text-right opacity-50">{t.properties.currentResident}</span>
-                      {activeTenant ? (
-                        <div 
-                          onClick={() => navigate(`/tenants/${activeTenant.id}`)}
-                          className="flex items-center justify-between bg-neutral-50/50 rounded border border-neutral-100 p-1.5 sm:p-4 hover:border-neutral-900 transition-colors cursor-pointer group/resident rtl:flex-row-reverse"
-                        >
-                          <div className="flex items-center gap-2 sm:gap-4 rtl:flex-row-reverse">
-                            <div className="w-7 h-7 sm:w-10 sm:h-10 bg-white rounded border border-neutral-100 flex items-center justify-center text-neutral-400 shrink-0">
-                              <Users size={12} className="sm:w-4 sm:h-4" />
-                            </div>
-                            <div className="rtl:text-right overflow-hidden">
-                               <span className="block font-bold text-[10px] sm:text-base tracking-tight uppercase truncate max-w-[60px] sm:max-w-full">{activeTenant.name}</span>
-                               <span className="block text-[7px] sm:text-[11px] font-medium uppercase tracking-widest text-neutral-400 opacity-60 leading-none">{t.properties.tenantActive}</span>
+                    {/* Information Body */}
+                    <div className="p-2.5 sm:p-6 flex-1 flex flex-col">
+                      <div className="flex-1">
+                        {/* Yield/Locality Grid - Stacked on mobile for clarity */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-6 mb-3 sm:mb-6">
+                          <div className="space-y-0.5 sm:space-y-1 rtl:text-right">
+                            <span className="text-[7px] sm:text-[10px] font-bold text-neutral-400 uppercase tracking-widest block opacity-60 leading-none">{t.properties.monthlyYield}</span>
+                            <div className="flex items-baseline gap-0.5 sm:gap-1 rtl:flex-row-reverse">
+                              <span className="text-xs sm:text-xl font-black text-neutral-900 tabular-nums tracking-tighter">
+                                {privacyMode ? '*****' : `${totalRent.toLocaleString()}`}
+                              </span>
+                              <span className="text-[6px] sm:text-[9px] font-black text-neutral-400 uppercase opacity-60 ml-0.5 sm:ml-0">{APP_CONFIG.CURRENCY}</span>
                             </div>
                           </div>
-                          <ChevronRight size={12} className="text-neutral-300 rtl:rotate-180 shrink-0" />
+                          <div className="space-y-0.5 sm:space-y-1 text-left sm:text-right rtl:text-right sm:rtl:text-left">
+                            <span className="text-[7px] sm:text-[10px] font-bold text-neutral-400 uppercase tracking-widest block opacity-60 leading-none">{t.properties.locality}</span>
+                            <span className="text-[9px] sm:text-base font-black text-neutral-800 uppercase truncate block leading-tight">{property.city || '---'}</span>
+                          </div>
                         </div>
-                      ) : (
-                        <div className="text-[9px] sm:text-[12px] font-bold text-neutral-400 bg-neutral-50/20 rounded py-2 sm:py-4 border border-neutral-100 border-dashed text-center uppercase tracking-widest">
-                          {t.properties.noOccupancy}
+
+                        <div className="space-y-1 sm:space-y-2 pt-2 sm:pt-4 border-t border-neutral-50 mt-1 sm:mt-2">
+                          <span className="text-[7px] sm:text-[10px] font-bold text-neutral-400 uppercase tracking-widest block rtl:text-right opacity-50">{t.properties.currentResident}</span>
+                          {activeTenant ? (
+                            <div 
+                              onClick={() => navigate(`/tenants/${activeTenant.id}`)}
+                              className="flex items-center justify-between bg-neutral-50/50 rounded-lg sm:rounded-2xl border border-neutral-100 p-1 sm:p-4 hover:border-neutral-900 transition-all cursor-pointer group/resident rtl:flex-row-reverse"
+                            >
+                              <div className="flex items-center gap-1.5 sm:gap-4 rtl:flex-row-reverse overflow-hidden">
+                                <div className="w-5 h-5 sm:w-10 sm:h-10 bg-white rounded-md sm:rounded-xl border border-neutral-100 flex items-center justify-center text-neutral-400 shadow-sm shrink-0">
+                                  <Users size={10} className="sm:w-4 sm:h-4" />
+                                </div>
+                                <div className="rtl:text-right overflow-hidden">
+                                   <span className="block font-black text-[8px] sm:text-sm tracking-tight uppercase truncate">{activeTenant.name}</span>
+                                </div>
+                              </div>
+                              <ChevronRight size={10} className="text-neutral-300 rtl:rotate-180 transition-transform group-hover/resident:translate-x-1 rtl:group-hover/resident:-translate-x-1 shrink-0" />
+                            </div>
+                          ) : (
+                            <div className="text-[7px] sm:text-[10px] font-black text-neutral-400 bg-neutral-50/20 rounded-lg sm:rounded-2xl py-1.5 sm:py-5 border border-neutral-100 border-dashed text-center uppercase tracking-widest">
+                              {t.properties.noOccupancy}
+                            </div>
+                          )}
                         </div>
+                      </div>
+                    </div>
+
+                    <div className="p-2 sm:p-4 bg-neutral-50/50 border-t border-neutral-100 flex items-center gap-1 sm:gap-2 rtl:flex-row-reverse">
+                      {!isReadOnly && (
+                        <Button 
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => navigate('/tenants', { state: { prefillPropertyId: property.id, openAddModal: true } })}
+                          className="flex-1 bg-white border border-neutral-100 h-7 sm:h-10 rounded-lg sm:rounded-xl hover:border-neutral-900 transition-all shadow-sm px-0"
+                        >
+                          <UserPlus size={10} className="sm:w-3.5 sm:h-3.5 mr-1 sm:mr-2 rtl:ml-1 sm:rtl:ml-2 text-neutral-400" />
+                          <span className="uppercase text-[7px] sm:text-[10px] font-black tracking-widest">{t.nav.tenants}</span>
+                        </Button>
+                      )}
+                      {archivedCount > 0 && (
+                        <Link 
+                          to={`/archived-tenants?propertyId=${property.id}`}
+                          className="w-7 h-7 sm:w-10 sm:h-10 bg-white border border-neutral-100 rounded-lg sm:rounded-xl flex items-center justify-center text-neutral-300 hover:text-neutral-900 hover:border-neutral-900 transition-all shadow-sm shrink-0"
+                          title={`${t.nav.archive} (${archivedCount})`}
+                        >
+                          <HistoryIcon size={12} className="sm:w-4.5 sm:h-4.5" />
+                        </Link>
                       )}
                     </div>
-                  </div>
-
-                  {property.notes && (
-                    <div className="mt-3 pt-3 border-t border-neutral-50">
-                       <p className="text-neutral-400 font-bold text-[8px] sm:text-xs leading-tight italic bg-neutral-50/50 p-2 rounded border border-neutral-100 rtl:text-right line-clamp-2">
-                        "{property.notes}"
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Professional Action Bar - Strictly Row-Based for 2-column view */}
-                <div className="p-2 sm:p-4 bg-white border-t border-neutral-100 flex items-center gap-1 sm:gap-2 rtl:flex-row-reverse">
-                  {!isReadOnly && (
-                    <>
-                      <Button 
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => navigate('/tenants', { state: { prefillPropertyId: property.id, openAddModal: true } })}
-                        className="flex-1 bg-white border border-neutral-100 h-8 sm:h-10 rounded hover:border-neutral-900 transition-colors px-0 sm:px-3"
-                      >
-                        <UserPlus size={14} className="sm:mr-1.5 rtl:sm:ml-1.5 text-neutral-400" />
-                        <span className="hidden sm:inline uppercase text-[10px] font-bold tracking-widest">{t.nav.tenants}</span>
-                      </Button>
-                      <Button 
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => navigate('/expenses', { state: { prefillPropertyId: property.id, openAddModal: true } })}
-                        className="flex-1 bg-white border border-neutral-100 h-8 sm:h-10 rounded hover:border-neutral-900 transition-colors px-0 sm:px-3"
-                      >
-                        <Receipt size={14} className="sm:mr-1.5 rtl:sm:ml-1.5 text-neutral-400" />
-                        <span className="hidden sm:inline uppercase text-[10px] font-bold tracking-widest">{t.nav.expenses}</span>
-                      </Button>
-                    </>
-                  )}
-                  {archivedCount > 0 && (
-                    <Link 
-                      to={`/archived-tenants?propertyId=${property.id}`}
-                      className="w-8 h-8 sm:w-10 sm:h-10 bg-neutral-50 border border-neutral-100 rounded flex items-center justify-center text-neutral-300 hover:text-neutral-900 hover:bg-white transition-all shrink-0"
-                      title={`${t.nav.archive} (${archivedCount} ${t.nav.historyRecords})`}
-                    >
-                      <HistoryIcon size={14} className="sm:w-5 sm:h-5" />
-                    </Link>
-                  )}
-                </div>
-              </Card>
-            );
-          })}
+                  </Card>
+                );
+              })}
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
-      {isModalOpen && (
+      {/* Modals */}
+      {isPropertyModalOpen && (
         <PropertyFormModal
-          isOpen={isModalOpen}
-          onClose={handleCloseModal}
+          isOpen={isPropertyModalOpen}
+          onClose={() => setIsPropertyModalOpen(false)}
           onSave={handleSaveProperty}
           editingProperty={editingProperty}
+        />
+      )}
+
+      {isFolderModalOpen && (
+        <FolderFormModal
+          isOpen={isFolderModalOpen}
+          onClose={() => setIsFolderModalOpen(false)}
+          onSave={handleSaveFolder}
+          editingFolder={editingFolder}
+          allProperties={properties}
+        />
+      )}
+
+      {propertyToMove && (
+        <MoveToFolderModal
+          isOpen={isMoveModalOpen}
+          onClose={() => setIsMoveModalOpen(false)}
+          onAssign={assignPropertyToFolder}
+          property={propertyToMove}
+          folders={folders}
         />
       )}
 
       {deleteModalOpen && (
         <ConfirmModal
           isOpen={deleteModalOpen}
-          onCancel={() => {
-            setDeleteModalOpen(false);
-            setPropertyToDelete(null);
-          }}
-          onConfirm={confirmDelete}
+          onCancel={() => setDeleteModalOpen(false)}
+          onConfirm={confirmDeleteProperty}
           title={t.properties.archiveAsset}
           message={t.properties.archiveAssetConfirm.replace('{name}', propertyToDelete?.name || '')}
           confirmText={t.common.confirmDelete}
           isDestructive={true}
         />
       )}
+
+      {folderDeleteModalOpen && folderToDelete && (
+        <ConfirmModal
+          isOpen={folderDeleteModalOpen}
+          onCancel={() => setFolderDeleteModalOpen(false)}
+          onConfirm={confirmDeleteFolder}
+          title={t.properties.deleteFolder}
+          message={t.properties.confirmDeleteFolder}
+          confirmText={t.common.delete}
+          isDestructive={true}
+        />
+      )}
     </div>
   );
 };
+
 

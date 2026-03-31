@@ -89,6 +89,44 @@ export const ReceiptPreview: React.FC = () => {
     return () => window.removeEventListener('resize', updateScale);
   }, [currentLayout]);
 
+  // Keyboard shortcuts for designer
+  useEffect(() => {
+    if (!isDesigning || !activeField || !tempLayout) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const step = e.shiftKey ? 1 : 0.1;
+      
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        e.preventDefault();
+        adjustPosition(e.key, step);
+      } else if (e.key === '+' || e.key === '=') {
+        adjustSize(activeField === 'backgroundImage' ? 'background' : 'current', 'font', 1);
+      } else if (e.key === '-' || e.key === '_') {
+        adjustSize(activeField === 'backgroundImage' ? 'background' : 'current', 'font', -1);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isDesigning, activeField, tempLayout]);
+
+  const adjustPosition = (key: string, step: number) => {
+    if (!tempLayout || !activeField) return;
+    const isBg = activeField === 'backgroundImage';
+    const target = isBg ? tempLayout.bgPosition : (tempLayout[activeField as keyof ReceiptLayout] as LayoutPosition);
+    
+    const newPos = { ...target };
+    if (key === 'ArrowUp') newPos.y -= step;
+    if (key === 'ArrowDown') newPos.y += step;
+    if (key === 'ArrowLeft') newPos.x -= step;
+    if (key === 'ArrowRight') newPos.x += step;
+
+    setTempLayout({
+      ...tempLayout,
+      [isBg ? 'bgPosition' : activeField]: newPos
+    });
+  };
+
   const tenantPaymentIndex = useMemo(() => {
     if (!tenant || !paymentId) return 1;
     const ids = paymentId.split(',');
@@ -609,22 +647,42 @@ export const ReceiptPreview: React.FC = () => {
         )}
       </div>
 
-      {/* Mobile Design Hint Overlay */}
+      {/* Field Editor Overlay - Universal for PC & Mobile */}
       {isDesigning && (
         <div 
-          className="fixed left-6 right-6 z-50 designer-overlay sm:hidden"
+          className="fixed left-6 right-6 sm:left-auto sm:right-10 sm:w-80 sm:bottom-10 z-50 designer-overlay"
           style={{ bottom: 'max(calc(env(safe-area-inset-bottom) + 1.5rem), 2.5rem)' }}
         >
-          <div className="bg-neutral-900/90 backdrop-blur text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center justify-between border border-white/10">
-            <div className={`flex items-center gap-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
-               <Move className="w-4 h-4 text-primary-400" />
-               <p className="text-[9px] font-black uppercase tracking-widest leading-none">Repositioning Active</p>
-            </div>
-            {activeField && activeField !== 'backgroundImage' && (
-               <div className="flex gap-1.5">
-                  <button onClick={() => adjustSize('current', 'font', 1)} className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center font-black text-xs">A+</button>
-                  <button onClick={() => adjustSize('current', 'font', -1)} className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center font-black text-xs">A-</button>
+          <div className="bg-neutral-900 border border-white/10 text-white px-5 py-4 rounded-3xl shadow-2xl flex flex-col gap-4">
+            <div className={`flex items-center justify-between ${isRTL ? 'flex-row-reverse' : ''}`}>
+               <div className={`flex items-center gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
+                  <Move className="w-4 h-4 text-primary-400" />
+                  <p className="text-[10px] font-black uppercase tracking-widest leading-none">
+                    {activeField ? t.receipt[activeField as keyof typeof t.receipt] || activeField.toString() : 'Select Field'}
+                  </p>
                </div>
+               <div className="flex gap-1">
+                  <button onClick={() => adjustSize('current', 'font', 1)} className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center font-black text-xs">A+</button>
+                  <button onClick={() => adjustSize('current', 'font', -1)} className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center font-black text-xs">A-</button>
+               </div>
+            </div>
+
+            {activeField && activeField !== 'backgroundImage' && (
+              <div className="flex flex-col gap-2">
+                <div className="flex justify-between text-[8px] font-black uppercase tracking-tighter text-neutral-400">
+                   <span>Small</span>
+                   <span>Precision Size Slider</span>
+                   <span>Large</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="8" 
+                  max="48" 
+                  value={(displayLayout[activeField as keyof ReceiptLayout] as LayoutPosition).fontSize || 14}
+                  onChange={(e) => adjustSize('current', 'font', parseInt(e.target.value) - ((displayLayout[activeField as keyof ReceiptLayout] as LayoutPosition).fontSize || 14))}
+                  className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary-500"
+                />
+              </div>
             )}
           </div>
         </div>
@@ -680,7 +738,20 @@ export const ReceiptPreview: React.FC = () => {
             {renderField('periodEnd', formatDateFR(safeEndDate))}
             {renderField('paymentDate', formatDateFR(safePaymentDate))}
             {renderField('paymentPlace', t.receipt.paymentPlacePlaceholder, '', true)}
-            {renderField('propertyType', property.type || 'شقة', '', true)}
+            {renderField('propertyType', (() => {
+              const type = String(property.type || 'Apartment');
+              const mapping: Record<string, string> = {
+                'Apartment': 'شقة',
+                'Villa': 'فيلا',
+                'Garage': 'مرآب',
+                'House': 'دار',
+                'شقة': 'شقة',
+                'فيلا': 'فيلا',
+                'مرآب': 'مرآب',
+                'دار': 'دار'
+              };
+              return mapping[type] || type;
+            })(), '', true)}
             {renderField('tenantReceiptNumber', formatSequence(paymentList[0]?.receiptSequence || ((tenant?.lastReceiptSequence || 0) + 1)))}
           </div>
         </div>

@@ -16,4 +16,5 @@ export const FIREBASE_COLLECTIONS = {
   LAYOUTS: 'layouts',
   EXPENSES: 'expenses',
   LANDLORD_ACCESS: 'landlord_access',
+  FOLDERS: 'folders',
 };

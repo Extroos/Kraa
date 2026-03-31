@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Property, Tenant, Payment, TenantWithStatus, PaymentStatus, PaymentMethod, Receipt, GlobalStats, ReceiptLayout, Expense, LandlordAccess } from '../types';
+import { Property, Tenant, Payment, TenantWithStatus, PaymentStatus, PaymentMethod, Receipt, GlobalStats, ReceiptLayout, Expense, LandlordAccess, PropertyFolder } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { 
   format, 
@@ -12,6 +12,7 @@ import {
   isValid,
   differenceInDays,
   startOfMonth,
+  endOfMonth,
 } from 'date-fns';
 import { db, auth, storage } from '../firebase';
 import { 
@@ -55,6 +56,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     globalStats: null,
     receiptLayout: null,
     authorizedLandlords: [],
+    folders: [],
     syncCounter: 0,
     additionalPayments: [],
   });
@@ -79,6 +81,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           globalStats: null,
           receiptLayout: null,
           authorizedLandlords: [],
+          folders: [],
           syncCounter: 0,
           additionalPayments: [],
         });
@@ -140,9 +143,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubExpenses = onSnapshot(qExpenses, (snapshot) => {
       const expenses = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Expense));
       setState(prev => ({ ...prev, expenses }));
+    }, (error) => handleFirestoreError(error, OperationType.LIST, FIREBASE_COLLECTIONS.EXPENSES, user.uid, user.email));
+
+    const qFolders = query(collection(db, FIREBASE_COLLECTIONS.FOLDERS), where('ownerId', '==', effectiveOwnerId));
+    const unsubFolders = onSnapshot(qFolders, (snapshot) => {
+      const folders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PropertyFolder));
+      setState(prev => ({ ...prev, folders }));
       setLoading(false);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, FIREBASE_COLLECTIONS.EXPENSES, user.uid, user.email);
+      handleFirestoreError(error, OperationType.LIST, FIREBASE_COLLECTIONS.FOLDERS, user.uid, user.email);
       setLoading(false);
     });
 
@@ -170,6 +179,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubStats();
       unsubLayouts();
       unsubExpenses();
+      unsubFolders();
       unsubLandlords();
     };
   }, [user, effectiveOwnerId]); // No need for reactive here, useMemo handles it now!
@@ -339,12 +349,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateProperty = async (id: string, property: Partial<Property>, imageFile?: File) => {
     if (!user || isReadOnly || !effectiveOwnerId) return;
     try {
-      let imageUrl = property.imageUrl;
+      const updateData: any = { ...property };
+      
       if (imageFile) {
-        imageUrl = await uploadPropertyImage(id, imageFile);
+        updateData.imageUrl = await uploadPropertyImage(id, imageFile);
       }
       
-      await updateDoc(doc(db, FIREBASE_COLLECTIONS.PROPERTIES, id), { ...property, imageUrl });
+      // Remove any undefined values to prevent Firestore errors
+      Object.keys(updateData).forEach(key => {
+        if (updateData[key] === undefined) {
+          delete updateData[key];
+        }
+      });
+      
+      await updateDoc(doc(db, FIREBASE_COLLECTIONS.PROPERTIES, id), updateData);
+      
+      // CRITICAL FIX: Refresh local state so it appears immediately
+      triggerDataSync();
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `${FIREBASE_COLLECTIONS.PROPERTIES}/${id}`, user.uid, user.email);
     }
@@ -826,10 +847,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         nextPaymentId = `${tenant.id}_${safeYear}_${periodStr}`;
       }
 
+      // 3. Adjusted Due Date Logic for 'End of Period' tenants (e.g. at the end of 3 months for quarterly)
+      if (tenant.paymentDay === 'end') {
+        if (firstUnpaid && firstUnpaid.periodEnd) {
+          // Robust duration-aware calculation for grouped or custom blocks
+          nextDueDate = endOfMonth(parseISO(firstUnpaid.periodEnd));
+        } else {
+          // Fallback to standard cycle logic for future payments not yet in the DB
+          const monthsInCycle = getCycleMonths(tenant.paymentCycle);
+          nextDueDate = endOfMonth(addMonths(nextDueDate, monthsInCycle - 1));
+        }
+      }
+
       let status: PaymentStatus = 'paid';
-      if (isValid(nextDueDate)) {
-        if (isBefore(nextDueDate, today)) status = 'late';
-        else if (isBefore(nextDueDate, addDays(today, 7))) status = 'due';
+      if (firstUnpaid) {
+        if (isValid(nextDueDate)) {
+          if (isBefore(nextDueDate, today)) status = 'late';
+          else status = 'due';
+        }
       }
       
       const daysRemaining = isValid(nextDueDate) ? differenceInDays(nextDueDate, today) : 0;
@@ -1629,6 +1664,103 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (err) { console.error("Group failed:", err); }
   };
 
+  const addFolder = async (name: string) => {
+    if (!user || isReadOnly || !effectiveOwnerId) return;
+    try {
+      const folderId = uuidv4();
+      const folderRef = doc(db, FIREBASE_COLLECTIONS.FOLDERS, folderId);
+      const folder: PropertyFolder = {
+        id: folderId,
+        name,
+        ownerId: effectiveOwnerId,
+        createdAt: new Date().toISOString()
+      };
+      await setDoc(folderRef, folder);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, FIREBASE_COLLECTIONS.FOLDERS);
+    }
+  };
+
+  const updateFolder = async (id: string, name: string) => {
+    if (!user || isReadOnly || !effectiveOwnerId) return;
+    try {
+      const folderRef = doc(db, FIREBASE_COLLECTIONS.FOLDERS, id);
+      await updateDoc(folderRef, { name });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, FIREBASE_COLLECTIONS.FOLDERS);
+    }
+  };
+
+  const deleteFolder = async (id: string) => {
+    if (!user || isReadOnly || !effectiveOwnerId) return;
+    try {
+      const q = query(collection(db, FIREBASE_COLLECTIONS.PROPERTIES), where('folderId', '==', id));
+      const snaps = await getDocs(q);
+      const batch = snaps.docs.map(d => updateDoc(doc(db, FIREBASE_COLLECTIONS.PROPERTIES, d.id), { folderId: deleteField() }));
+      await Promise.all(batch);
+      await deleteDoc(doc(db, FIREBASE_COLLECTIONS.FOLDERS, id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, FIREBASE_COLLECTIONS.FOLDERS);
+    }
+  };
+
+  const assignPropertyToFolder = async (propertyId: string, folderId: string | null) => {
+    if (!user || isReadOnly || !effectiveOwnerId) return;
+    try {
+      const propertyRef = doc(db, FIREBASE_COLLECTIONS.PROPERTIES, propertyId);
+      await updateDoc(propertyRef, { 
+        folderId: folderId === null ? deleteField() : folderId 
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, FIREBASE_COLLECTIONS.PROPERTIES);
+    }
+  };
+
+  const updateFolderWithProperties = async (folderId: string | null, name: string, propertyIds: string[]) => {
+    if (!user || isReadOnly || !effectiveOwnerId) return;
+    try {
+      const { writeBatch } = await import('firebase/firestore');
+      const batch = writeBatch(db);
+      
+      let finalFolderId = folderId;
+      
+      // 1. Create or update the folder
+      if (!finalFolderId) {
+        finalFolderId = uuidv4();
+        const folderRef = doc(db, FIREBASE_COLLECTIONS.FOLDERS, finalFolderId);
+        const folder: PropertyFolder = {
+          id: finalFolderId,
+          name,
+          ownerId: effectiveOwnerId,
+          createdAt: new Date().toISOString()
+        };
+        batch.set(folderRef, folder);
+      } else {
+        const folderRef = doc(db, FIREBASE_COLLECTIONS.FOLDERS, finalFolderId);
+        batch.update(folderRef, { name });
+      }
+      
+      // 2. Clear folderId for properties previously in this folder (if editing)
+      if (folderId) {
+        const prevProps = state.properties.filter(p => p.folderId === folderId);
+        for (const prop of prevProps) {
+          if (!propertyIds.includes(prop.id)) {
+            batch.update(doc(db, FIREBASE_COLLECTIONS.PROPERTIES, prop.id), { folderId: deleteField() });
+          }
+        }
+      }
+      
+      // 3. Assign folderId to selected properties
+      for (const pId of propertyIds) {
+        batch.update(doc(db, FIREBASE_COLLECTIONS.PROPERTIES, pId), { folderId: finalFolderId });
+      }
+      
+      await batch.commit();
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, FIREBASE_COLLECTIONS.FOLDERS);
+    }
+  };
+
   return (
     <AppContext.Provider value={{ 
       ...filteredState, 
@@ -1672,13 +1804,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       splitPayment,
       groupPayments,
       loadArchivalYear,
-      clearArchivalCache: () => setState(prev => ({ ...prev, additionalPayments: [] }))
+      clearArchivalCache: () => setState(prev => ({ ...prev, additionalPayments: [] })),
+      addFolder,
+      updateFolder,
+      deleteFolder,
+      assignPropertyToFolder,
+      updateFolderWithProperties
     }}>
       {children}
     </AppContext.Provider>
   );
 };
-
 export const DEFAULT_RECEIPT_LAYOUT = {
   bgImage: '/kra.jpg',
   bgPosition: { x: 0, y: 0, width: 165, height: 103 },

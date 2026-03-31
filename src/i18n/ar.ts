@@ -98,6 +98,17 @@ export const ar: TranslationKeys = {
     villa: 'فيلا',
     garage: 'مرآب',
     house: 'دار',
+    collections: 'المجموعات',
+    newFolder: 'مجموعة جديدة',
+    editFolder: 'تعديل المجموعة',
+    folderName: 'اسم المجموعة',
+    noFolders: 'لم يتم إنشاء مجموعات',
+    confirmDeleteFolder: 'هل أنت متأكد من حذف هذه المجموعة؟ لن يتم حذف العقارات الموجودة بداخلها.',
+    addAssets: 'اختر العقارات',
+    inOtherFolder: 'في مجموعة أخرى',
+    allAssets: 'جميع العقارات',
+    deleteFolder: 'حذف المجموعة',
+    moveToFolder: 'نقل إلى مجموعة',
   },
 
   tenants: {

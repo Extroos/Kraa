@@ -101,10 +101,10 @@ export const PropertyFormModal: React.FC<PropertyFormModalProps> = ({
               onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
               className="w-full h-10 px-3 bg-neutral-50 border border-neutral-200 rounded text-sm font-medium focus:border-primary-500 outline-none transition-colors cursor-pointer appearance-none"
             >
-              <option value="Apartment">{t.properties.apartment}</option>
-              <option value="Villa">{t.properties.villa}</option>
-              <option value="Garage">{t.properties.garage}</option>
-              <option value="House">{t.properties.house}</option>
+              <option value="شقة">شقة</option>
+              <option value="فيلا">فيلا</option>
+              <option value="مرآب">مرآب</option>
+              <option value="دار">دار</option>
             </select>
           </div>
         </div>

@@ -6,7 +6,7 @@ import {
   startOfMonth,
   lastDayOfMonth,
 } from 'date-fns';
-import { Property, Tenant, Payment, TenantWithStatus, PaymentMethod, Receipt, GlobalStats, PaymentCycle, ReceiptLayout, Expense, LandlordAccess } from '../types';
+import { Property, Tenant, Payment, TenantWithStatus, PaymentMethod, Receipt, GlobalStats, PaymentCycle, ReceiptLayout, Expense, LandlordAccess, PropertyFolder } from '../types';
 
 export interface AppState {
   properties: Property[];
@@ -17,6 +17,7 @@ export interface AppState {
   globalStats: GlobalStats | null;
   receiptLayout: ReceiptLayout | null;
   authorizedLandlords: LandlordAccess[];
+  folders: PropertyFolder[];
   syncCounter: number;
   additionalPayments: Payment[]; // Payments loaded on-demand (archival)
 }
@@ -63,6 +64,11 @@ export interface AppContextType extends AppState {
   groupPayments: (paymentIds: string[]) => Promise<void>;
   loadArchivalYear: (tenantId: string, year: number) => Promise<void>;
   clearArchivalCache: () => void;
+  addFolder: (name: string) => Promise<void>;
+  updateFolder: (id: string, name: string) => Promise<void>;
+  deleteFolder: (id: string) => Promise<void>;
+  assignPropertyToFolder: (propertyId: string, folderId: string | null) => Promise<void>;
+  updateFolderWithProperties: (folderId: string | null, name: string, propertyIds: string[]) => Promise<void>;
 }
 
 export const getCycleMonths = (cycle: PaymentCycle): number => {
