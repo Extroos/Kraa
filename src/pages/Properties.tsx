@@ -365,7 +365,7 @@ export const Properties: React.FC = () => {
                       <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
                       
                       <div className="absolute bottom-5 left-5 right-5 text-white rtl:text-right">
-                        <h2 className="text-xl font-black leading-tight tracking-tight uppercase line-clamp-1 mb-1 shadow-sm">{property.name}</h2>
+                        <h2 className="text-xl font-black leading-tight tracking-tight uppercase line-clamp-1 mb-1 text-white shadow-sm">{property.name}</h2>
                         <div className="flex items-center gap-2 opacity-90 rtl:flex-row-reverse">
                           <MapPin size={14} className="shrink-0 text-white" />
                           <span className="text-[10px] font-bold uppercase tracking-widest truncate">{property.address}</span>
