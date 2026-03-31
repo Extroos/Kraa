@@ -494,7 +494,7 @@ export const ReceiptPreview: React.FC = () => {
 
   return (
     <div 
-      className={`min-h-screen bg-neutral-100 print:bg-white flex flex-col items-center py-6 sm:py-16 print:py-0 print:block`}
+      className={`min-h-screen bg-neutral-100 print:bg-white flex flex-col items-center py-6 sm:py-16 print:py-0 print:block print:relative`}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onTouchMove={handleTouchMove}
@@ -504,8 +504,8 @@ export const ReceiptPreview: React.FC = () => {
       <style>{`
         @media print {
           @page { size: ${displayLayout.pageSize?.width || 165}mm ${displayLayout.pageSize?.height || 103}mm; margin: 0; }
-          body { margin: 0; padding: 0; background: white; }
-          .print-container { position: relative; width: ${displayLayout.pageSize?.width || 165}mm; height: ${displayLayout.pageSize?.height || 103}mm; overflow: visible; background: white; page-break-after: avoid; page-break-before: avoid; }
+          body { margin: 0 !important; padding: 0 !important; background: white !important; }
+          .print-container { position: absolute !important; top: 0 !important; left: 0 !important; margin: 0 !important; width: ${displayLayout.pageSize?.width || 165}mm !important; height: ${displayLayout.pageSize?.height || 103}mm !important; overflow: visible; background: white; page-break-after: avoid; page-break-before: avoid; }
           nav, header, aside, .designer-controls, .designer-overlay, .background-guide { display: none !important; }
         }
         @media screen {
