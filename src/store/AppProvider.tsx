@@ -1667,24 +1667,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addFolder = async (name: string) => {
     if (!user || isReadOnly || !effectiveOwnerId) return;
     try {
-      const folderId = uuidv4();
-      const folderRef = doc(db, FIREBASE_COLLECTIONS.FOLDERS, folderId);
+      const id = uuidv4();
+      const folderRef = doc(db, `users/${effectiveOwnerId}/propertyFolders`, id);
       const folder: PropertyFolder = {
-        id: folderId,
+        id,
         name,
         ownerId: effectiveOwnerId,
         createdAt: new Date().toISOString()
       };
       await setDoc(folderRef, folder);
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, FIREBASE_COLLECTIONS.FOLDERS);
+      handleFirestoreError(error, OperationType.WRITE, FIREBASE_COLLECTIONS.FOLDERS);
     }
   };
 
   const updateFolder = async (id: string, name: string) => {
     if (!user || isReadOnly || !effectiveOwnerId) return;
     try {
-      const folderRef = doc(db, FIREBASE_COLLECTIONS.FOLDERS, id);
+      const folderRef = doc(db, `users/${effectiveOwnerId}/propertyFolders`, id);
       await updateDoc(folderRef, { name });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, FIREBASE_COLLECTIONS.FOLDERS);
@@ -1694,11 +1694,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteFolder = async (id: string) => {
     if (!user || isReadOnly || !effectiveOwnerId) return;
     try {
-      const q = query(collection(db, FIREBASE_COLLECTIONS.PROPERTIES), where('folderId', '==', id));
-      const snaps = await getDocs(q);
-      const batch = snaps.docs.map(d => updateDoc(doc(db, FIREBASE_COLLECTIONS.PROPERTIES, d.id), { folderId: deleteField() }));
-      await Promise.all(batch);
-      await deleteDoc(doc(db, FIREBASE_COLLECTIONS.FOLDERS, id));
+      const { writeBatch } = await import('firebase/firestore');
+      const batch = writeBatch(db);
+      
+      // 1. Clear folderId for properties in this folder
+      const associatedProps = state.properties.filter(p => p.folderId === id);
+      associatedProps.forEach(p => {
+        batch.update(doc(db, `users/${effectiveOwnerId}/properties`, p.id), { folderId: deleteField() });
+      });
+      
+      // 2. Delete the folder
+      batch.delete(doc(db, `users/${effectiveOwnerId}/propertyFolders`, id));
+      
+      await batch.commit();
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, FIREBASE_COLLECTIONS.FOLDERS);
     }
@@ -1707,7 +1715,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const assignPropertyToFolder = async (propertyId: string, folderId: string | null) => {
     if (!user || isReadOnly || !effectiveOwnerId) return;
     try {
-      const propertyRef = doc(db, FIREBASE_COLLECTIONS.PROPERTIES, propertyId);
+      const propertyRef = doc(db, `users/${effectiveOwnerId}/properties`, propertyId);
       await updateDoc(propertyRef, { 
         folderId: folderId === null ? deleteField() : folderId 
       });
@@ -1727,7 +1735,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // 1. Create or update the folder
       if (!finalFolderId) {
         finalFolderId = uuidv4();
-        const folderRef = doc(db, FIREBASE_COLLECTIONS.FOLDERS, finalFolderId);
+        const folderRef = doc(db, `users/${effectiveOwnerId}/propertyFolders`, finalFolderId);
         const folder: PropertyFolder = {
           id: finalFolderId,
           name,
@@ -1736,7 +1744,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         };
         batch.set(folderRef, folder);
       } else {
-        const folderRef = doc(db, FIREBASE_COLLECTIONS.FOLDERS, finalFolderId);
+        const folderRef = doc(db, `users/${effectiveOwnerId}/propertyFolders`, finalFolderId);
         batch.update(folderRef, { name });
       }
       
@@ -1745,14 +1753,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const prevProps = state.properties.filter(p => p.folderId === folderId);
         for (const prop of prevProps) {
           if (!propertyIds.includes(prop.id)) {
-            batch.update(doc(db, FIREBASE_COLLECTIONS.PROPERTIES, prop.id), { folderId: deleteField() });
+            batch.update(doc(db, `users/${effectiveOwnerId}/properties`, prop.id), { folderId: deleteField() });
           }
         }
       }
       
       // 3. Assign folderId to selected properties
       for (const pId of propertyIds) {
-        batch.update(doc(db, FIREBASE_COLLECTIONS.PROPERTIES, pId), { folderId: finalFolderId });
+        batch.update(doc(db, `users/${effectiveOwnerId}/properties`, pId), { folderId: finalFolderId });
       }
       
       await batch.commit();
