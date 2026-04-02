@@ -277,36 +277,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         triggerDataSync();
       }
 
-      // 2. Generate Missing Payments for Current Year AND Next Year if late in the year (Smart Prep)
+      // 2. Generate Missing Payments for Tenure-Aware Timeline
       const now = new Date();
       const currentYear = now.getFullYear();
-      const prepNextYear = now.getMonth() >= 8; // Start prepping for next year in September (Month 8)
+      const prepNextYear = now.getMonth() >= 8; 
       
-      const yearsToGenerate = [currentYear];
-      if (prepNextYear) yearsToGenerate.push(currentYear + 1);
-
-      for (const year of yearsToGenerate) {
-        for (const tenant of state.tenants) {
-          if (tenant.tenantStatus === 'archived') continue;
-          
-          const hasYear = state.payments.some(p => p.tenantId === tenant.id && p.year === year);
+      for (const tenant of state.tenants) {
+        if (tenant.tenantStatus === 'archived' || !tenant.startDate) continue;
+        
+        const start = parseISO(tenant.startDate);
+        if (!isValid(start)) continue;
+        
+        const startYear = start.getFullYear();
+        const yearsToGenerate: number[] = [];
+        
+        // SAFE BACKGROUND SYNC: Only auto-generate for years currently in our local sync snapshot (currentYear and previous)
+        // This prevents infinite generation cycles for older data not in the current snapshot
+        const syncRangeStart = currentYear - 1;
+        const targetEndYear = prepNextYear ? currentYear + 1 : currentYear;
+        const checkStartYear = Math.max(startYear, syncRangeStart);
+        
+        for (let y = checkStartYear; y <= targetEndYear; y++) {
+          const hasYear = state.payments.some(p => p.tenantId === tenant.id && p.year === y);
           if (!hasYear) {
+            yearsToGenerate.push(y);
+          }
+        }
+
+        if (yearsToGenerate.length > 0) {
+          const { writeBatch } = await import('firebase/firestore');
+          const batch = writeBatch(db);
+          let addedCount = 0;
+
+          for (const year of yearsToGenerate) {
             const generated = generatePaymentsForYear(tenant, year, effectiveOwnerId, state.payments);
-            if (generated.length === 0) continue;
-            
-            const { writeBatch } = await import('firebase/firestore');
-            const batch = writeBatch(db);
-            let addedCount = 0;
-            
             for (const payment of generated) {
               const docRef = doc(db, FIREBASE_COLLECTIONS.PAYMENTS, payment.id);
               batch.set(docRef, payment, { merge: true });
               addedCount++;
             }
-            
-            if (addedCount > 0) {
-              try { await batch.commit(); } catch (error) { console.error(`Batch payment generation for ${year} failed:`, error); }
-            }
+          }
+
+          if (addedCount > 0) {
+            try { await batch.commit(); } catch (error) { console.error(`Batch payment generation for tenant ${tenant.id} failed:`, error); }
           }
         }
       }
@@ -455,12 +468,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // 1. Add Tenant document
       batch.set(doc(db, FIREBASE_COLLECTIONS.TENANTS, id), newTenant);
       
-      // 2. Generate initial payments
-      const year = new Date().getFullYear();
-      const generated = generatePaymentsForYear(newTenant, year, effectiveOwnerId);
+      // 2. Generate initial payments (Tenure-Aware)
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const start = parseISO(newTenant.startDate);
+      const startYear = isValid(start) ? start.getFullYear() : currentYear;
       
-      for (const payment of generated) {
-        batch.set(doc(db, FIREBASE_COLLECTIONS.PAYMENTS, payment.id), payment);
+      // Limit generation to last 10 years to stay within batch sizes and reasonable history
+      const actualStartYear = Math.max(startYear, currentYear - 10);
+      
+      for (let y = actualStartYear; y <= currentYear; y++) {
+        const generated = generatePaymentsForYear(newTenant, y, effectiveOwnerId);
+        for (const payment of generated) {
+          batch.set(doc(db, FIREBASE_COLLECTIONS.PAYMENTS, payment.id), payment);
+        }
       }
 
       await batch.commit();
@@ -1676,7 +1697,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!user || isReadOnly || !effectiveOwnerId) return;
     try {
       const id = uuidv4();
-      const folderRef = doc(db, `users/${effectiveOwnerId}/propertyFolders`, id);
+      const folderRef = doc(db, FIREBASE_COLLECTIONS.FOLDERS, id);
       const folder: PropertyFolder = {
         id,
         name,
@@ -1692,7 +1713,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateFolder = async (id: string, name: string) => {
     if (!user || isReadOnly || !effectiveOwnerId) return;
     try {
-      const folderRef = doc(db, `users/${effectiveOwnerId}/propertyFolders`, id);
+      const folderRef = doc(db, FIREBASE_COLLECTIONS.FOLDERS, id);
       await updateDoc(folderRef, { name });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, FIREBASE_COLLECTIONS.FOLDERS);
@@ -1708,11 +1729,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // 1. Clear folderId for properties in this folder
       const associatedProps = state.properties.filter(p => p.folderId === id);
       associatedProps.forEach(p => {
-        batch.update(doc(db, `users/${effectiveOwnerId}/properties`, p.id), { folderId: deleteField() });
+        batch.update(doc(db, FIREBASE_COLLECTIONS.PROPERTIES, p.id), { folderId: deleteField() });
       });
       
       // 2. Delete the folder
-      batch.delete(doc(db, `users/${effectiveOwnerId}/propertyFolders`, id));
+      batch.delete(doc(db, FIREBASE_COLLECTIONS.FOLDERS, id));
       
       await batch.commit();
     } catch (error) {
@@ -1723,7 +1744,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const assignPropertyToFolder = async (propertyId: string, folderId: string | null) => {
     if (!user || isReadOnly || !effectiveOwnerId) return;
     try {
-      const propertyRef = doc(db, `users/${effectiveOwnerId}/properties`, propertyId);
+      const propertyRef = doc(db, FIREBASE_COLLECTIONS.PROPERTIES, propertyId);
       await updateDoc(propertyRef, { 
         folderId: folderId === null ? deleteField() : folderId 
       });
@@ -1743,7 +1764,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // 1. Create or update the folder
       if (!finalFolderId) {
         finalFolderId = uuidv4();
-        const folderRef = doc(db, `users/${effectiveOwnerId}/propertyFolders`, finalFolderId);
+        const folderRef = doc(db, FIREBASE_COLLECTIONS.FOLDERS, finalFolderId);
         const folder: PropertyFolder = {
           id: finalFolderId,
           name,
@@ -1752,7 +1773,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         };
         batch.set(folderRef, folder);
       } else {
-        const folderRef = doc(db, `users/${effectiveOwnerId}/propertyFolders`, finalFolderId);
+        const folderRef = doc(db, FIREBASE_COLLECTIONS.FOLDERS, finalFolderId);
         batch.update(folderRef, { name });
       }
       
@@ -1761,19 +1782,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const prevProps = state.properties.filter(p => p.folderId === folderId);
         for (const prop of prevProps) {
           if (!propertyIds.includes(prop.id)) {
-            batch.update(doc(db, `users/${effectiveOwnerId}/properties`, prop.id), { folderId: deleteField() });
+            batch.update(doc(db, FIREBASE_COLLECTIONS.PROPERTIES, prop.id), { folderId: deleteField() });
           }
         }
       }
       
       // 3. Assign folderId to selected properties
       for (const pId of propertyIds) {
-        batch.update(doc(db, `users/${effectiveOwnerId}/properties`, pId), { folderId: finalFolderId });
+        batch.update(doc(db, FIREBASE_COLLECTIONS.PROPERTIES, pId), { folderId: finalFolderId });
       }
       
       await batch.commit();
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, FIREBASE_COLLECTIONS.FOLDERS);
+    }
+  };
+
+  const updateReceipt = async (id: string, updates: Partial<Receipt>) => {
+    if (!user || isReadOnly || !effectiveOwnerId) return;
+    try {
+      const receiptRef = doc(db, FIREBASE_COLLECTIONS.RECEIPTS, id);
+      await updateDoc(receiptRef, {
+        ...updates,
+        lastUpdated: new Date().toISOString()
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, FIREBASE_COLLECTIONS.RECEIPTS, user.uid, user.email);
     }
   };
 
@@ -1825,7 +1859,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateFolder,
       deleteFolder,
       assignPropertyToFolder,
-      updateFolderWithProperties
+      updateFolderWithProperties,
+      updateReceipt
     }}>
       {children}
     </AppContext.Provider>

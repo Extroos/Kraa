@@ -29,7 +29,18 @@ export const ReceiptPreview: React.FC = () => {
   const { paymentId } = useParams<{ paymentId: string }>();
   const navigate = useNavigate();
   const { isReadOnly } = useAuth();
-  const { payments, tenants, properties, generateReceipt, fetchTenantPayments, receiptLayout, saveReceiptLayout, updateLandlordActivity } = useAppContext();
+  const { 
+    payments, 
+    tenants, 
+    properties, 
+    receipts,
+    generateReceipt, 
+    fetchTenantPayments, 
+    receiptLayout, 
+    saveReceiptLayout, 
+    updateReceipt,
+    updateLandlordActivity 
+  } = useAppContext();
   const { t, isRTL } = useTranslation();
 
   useEffect(() => {
@@ -38,9 +49,11 @@ export const ReceiptPreview: React.FC = () => {
     }
   }, [paymentId, updateLandlordActivity, t.receipt.preview]);
 
-  const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isEditingText, setIsEditingText] = useState(false);
+  const [editingField, setEditingField] = useState<keyof ReceiptLayout | null>(null);
+  const [editValue, setEditValue] = useState('');
   const initialized = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -64,6 +77,12 @@ export const ReceiptPreview: React.FC = () => {
       pageSize: receiptLayout.pageSize || DEFAULT_RECEIPT_LAYOUT.pageSize
     } as ReceiptLayout;
   }, [receiptLayout]);
+
+  const receipt = useMemo(() => {
+    if (!paymentId) return null;
+    const ids = paymentId.split(',');
+    return receipts.find(r => r.paymentId === ids[0]) || null;
+  }, [receipts, paymentId]);
 
   const [bgFile, setBgFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -179,8 +198,7 @@ export const ReceiptPreview: React.FC = () => {
       setPaymentList(foundPayments);
       initialized.current = true;
       try {
-        const generatedReceipt = await generateReceipt(ids[0]);
-        setReceipt(generatedReceipt);
+        await generateReceipt(ids[0]);
         setLoading(false);
       } catch (err) {
         console.error("Failed to generate receipt:", err);
@@ -273,11 +291,34 @@ export const ReceiptPreview: React.FC = () => {
 
   const handleSaveLayout = async () => {
     if (tempLayout) {
+      setLoading(true);
       await saveReceiptLayout(tempLayout, bgFile || undefined);
-      setIsDesigning(false);
-      setTempLayout(null);
-      setBgFile(null);
+      // Give standard Firestore latency some room to reflect in state
+      setTimeout(() => {
+        setIsDesigning(false);
+        setTempLayout(null);
+        setBgFile(null);
+        setLoading(false);
+      }, 300);
     }
+  };
+
+  const handleFieldEdit = (field: keyof ReceiptLayout, currentContent: string | number) => {
+    if (!isEditingText || isDesigning) return;
+    setEditingField(field);
+    setEditValue(String(receipt?.customFields?.[field] || currentContent));
+  };
+
+  const saveCustomField = async () => {
+    if (!receipt || !editingField) return;
+    
+    const newCustomFields = {
+      ...(receipt.customFields || {}),
+      [editingField]: editValue
+    };
+
+    await updateReceipt(receipt.id, { customFields: newCustomFields });
+    setEditingField(null);
   };
 
   const adjustSize = (field: 'current' | 'background' | 'page', type: 'font' | 'width' | 'height', delta: number) => {
@@ -483,11 +524,16 @@ export const ReceiptPreview: React.FC = () => {
   const renderField = (field: keyof Omit<ReceiptLayout, 'id' | 'ownerId' | 'lastUpdated'>, content: string | number, extraClass = '', isRtl = false) => {
     const pos = displayLayout[field] as LayoutPosition;
     const fontSize = pos.fontSize || 14;
+    const isOverridden = receipt?.customFields && receipt.customFields[field];
+    const displayContent = isOverridden ? receipt.customFields![field] : content;
+
     return (
       <div 
         className={`receipt-field cursor-move select-none group touch-none ${extraClass} ${
           isDesigning && activeField === field ? 'ring-2 ring-primary-500 z-50' : ''
-        } ${isDesigning ? 'hover:bg-primary-500/5 transition-colors' : ''}`}
+        } ${isDesigning ? 'hover:bg-primary-500/5 transition-colors' : ''} ${
+          isEditingText ? 'hover:ring-2 hover:ring-warning-400 hover:bg-warning-50/30 cursor-pointer ring-1 ring-dashed ring-neutral-200' : ''
+        } ${isOverridden ? 'text-primary-700' : ''}`}
         style={{ 
           left: `${pos.x}mm`, 
           top: `${pos.y}mm`,
@@ -496,11 +542,17 @@ export const ReceiptPreview: React.FC = () => {
         dir={isRtl ? 'rtl' : 'ltr'}
         onMouseDown={(e) => handleDragStart(e, field)}
         onTouchStart={(e) => handleTouchStart(e, field)}
+        onClick={() => handleFieldEdit(field as keyof ReceiptLayout, content)}
       >
-        {content}
+        {displayContent}
         {isDesigning && (
           <div className="absolute -top-6 left-0 text-[10px] font-bold bg-primary-600 text-white px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 pointer-events-none uppercase tracking-tighter">
             {pos.x}mm , {pos.y}mm
+          </div>
+        )}
+        {isEditingText && (
+          <div className="absolute -bottom-4 right-0 text-[8px] font-bold bg-warning-600 text-white px-1 py-0.5 rounded opacity-0 group-hover:opacity-100 pointer-events-none uppercase">
+            Edit
           </div>
         )}
       </div>
@@ -663,9 +715,32 @@ export const ReceiptPreview: React.FC = () => {
         ) : (
           <div className={`flex flex-wrap items-center justify-center gap-2 sm:gap-3 bg-white/95 backdrop-blur p-2 rounded-2xl border border-neutral-200 shadow-lg ${isRTL ? 'flex-row-reverse' : ''}`}>
             {!isReadOnly && (
-              <Button onClick={() => { setTempLayout(currentLayout); setIsDesigning(true); }} variant="secondary" className="bg-white hover:bg-neutral-50 border-neutral-200 text-neutral-600 h-10 px-4 sm:px-5 font-black uppercase tracking-widest text-[9px] sm:text-[10px] rounded-xl">
-                <Edit3 className={`w-4 h-4 sm:w-5 sm:h-5 ${isRTL ? 'ml-1 sm:ml-2' : 'mr-1 sm:mr-2'}`} /> {t.receipt.designerMode}
-              </Button>
+              <>
+                <Button 
+                  onClick={() => { 
+                    setTempLayout(currentLayout); 
+                    setIsDesigning(true); 
+                    setIsEditingText(false);
+                  }} 
+                  variant="secondary" 
+                  className="bg-white hover:bg-neutral-50 border-neutral-200 text-neutral-600 h-10 px-4 sm:px-5 font-black uppercase tracking-widest text-[9px] sm:text-[10px] rounded-xl"
+                >
+                  <Edit3 className={`w-4 h-4 sm:w-5 sm:h-5 ${isRTL ? 'ml-1 sm:ml-2' : 'mr-1 sm:mr-2'}`} /> {t.receipt.designerMode}
+                </Button>
+
+                <Button 
+                  onClick={() => setIsEditingText(!isEditingText)} 
+                  variant="secondary" 
+                  className={`h-10 px-4 sm:px-5 font-black uppercase tracking-widest text-[9px] sm:text-[10px] rounded-xl transition-all ${
+                    isEditingText 
+                    ? 'bg-warning-50 border-warning-200 text-warning-700 shadow-inner' 
+                    : 'bg-white hover:bg-neutral-50 border-neutral-200 text-neutral-600'
+                  }`}
+                >
+                  <Save className={`w-4 h-4 sm:w-5 sm:h-5 ${isRTL ? 'ml-1 sm:ml-2' : 'mr-1 sm:mr-2'}`} />
+                  {isEditingText ? 'Stop Editing' : 'Edit Text'}
+                </Button>
+              </>
             )}
             
             <Button 
@@ -806,6 +881,51 @@ export const ReceiptPreview: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Edit Modal */}
+      {editingField && (
+        <div className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-neutral-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-white/20">
+            <div className="bg-neutral-900 text-white px-6 py-4 flex items-center justify-between">
+              <h3 className="font-black uppercase tracking-widest text-xs">Manual Override</h3>
+              <button onClick={() => setEditingField(null)} className="opacity-50 hover:opacity-100 transition-opacity">
+                <CloseIcon className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-8 pb-10 flex flex-col gap-6">
+              <div className="flex flex-col gap-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-neutral-400">
+                  {t.receipt[editingField as keyof typeof t.receipt] || editingField}
+                </label>
+                <textarea 
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  className="w-full bg-neutral-50 border-2 border-neutral-100 rounded-2xl px-5 py-4 font-bold text-neutral-900 focus:border-primary-500 focus:bg-white outline-none transition-all transition-duration-300 min-h-[120px] resize-none"
+                  placeholder="Enter custom text..."
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex gap-3 mt-2">
+                <Button onClick={() => setEditingField(null)} variant="secondary" className="flex-1 h-12 uppercase tracking-widest font-black text-[10px] rounded-2xl">
+                  {t.common.cancel}
+                </Button>
+                <Button onClick={saveCustomField} className="flex-2 h-12 bg-primary-600 hover:bg-primary-700 text-white uppercase tracking-widest font-black text-[10px] rounded-2xl shadow-lg shadow-primary-500/20 active:translate-y-0.5 transition-all">
+                  Save Changes
+                </Button>
+              </div>
+              
+              <div className="flex items-center gap-2 bg-neutral-50 p-3 rounded-xl border border-neutral-100">
+                <AlertCircle className="w-4 h-4 text-neutral-400 shrink-0" />
+                <p className="text-[9px] text-neutral-500 font-bold leading-tight">
+                  This edit only applies to this specific receipt. Global data remains unchanged.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Persistent Status Indicator - Bottom Left */}
       {isPaid && (

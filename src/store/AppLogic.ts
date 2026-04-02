@@ -70,6 +70,7 @@ export interface AppContextType extends AppState {
   deleteFolder: (id: string) => Promise<void>;
   assignPropertyToFolder: (propertyId: string, folderId: string | null) => Promise<void>;
   updateFolderWithProperties: (folderId: string | null, name: string, propertyIds: string[]) => Promise<void>;
+  updateReceipt: (id: string, updates: Partial<Receipt>) => Promise<void>;
 }
 
 export const getCycleMonths = (cycle: PaymentCycle): number => {

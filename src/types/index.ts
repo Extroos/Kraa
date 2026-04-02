@@ -87,6 +87,7 @@ export interface Receipt {
   receiptNumber: number;
   printedAt: string;
   ownerId: string;
+  customFields?: Record<string, string>;
 }
 
 export interface GlobalStats {
