@@ -78,7 +78,7 @@ export interface Payment {
   hasChequePhoto?: boolean;
 }
 
-export type PaymentStatus = 'paid' | 'due' | 'late';
+export type PaymentStatus = 'paid' | 'due' | 'late' | 'unpaid';
 
 export interface Receipt {
   id: string;

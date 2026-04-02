@@ -5,6 +5,7 @@ import {
   isValid,
   startOfMonth,
   lastDayOfMonth,
+  differenceInDays
 } from 'date-fns';
 import { Property, Tenant, Payment, TenantWithStatus, PaymentMethod, Receipt, GlobalStats, PaymentCycle, ReceiptLayout, Expense, LandlordAccess, PropertyFolder } from '../types';
 
@@ -156,7 +157,7 @@ export const generatePaymentsForYear = (tenant: Tenant, year: number, ownerId: s
   return newPayments;
 };
 
-export const getPaymentStatus = (payment: Payment): 'paid' | 'late' | 'due' => {
+export const getPaymentStatus = (payment: Payment): 'paid' | 'late' | 'due' | 'unpaid' => {
   if (payment.datePaid) return 'paid';
   
   const today = new Date();
@@ -168,5 +169,9 @@ export const getPaymentStatus = (payment: Payment): 'paid' | 'late' | 'due' => {
   dueDate.setHours(0, 0, 0, 0);
   
   if (dueDate < today) return 'late';
-  return 'due';
+  
+  // Calculate days remaining
+  if (differenceInDays(dueDate, today) <= 3) return 'due';
+  
+  return 'unpaid';
 };

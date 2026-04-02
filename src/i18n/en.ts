@@ -454,6 +454,7 @@ export const en = {
     paymentPlacePlaceholder: 'Safi',
     failedLoad: 'Failed to load receipt data',
     sequence: 'Sequence',
+    paidStatus: 'PAID / خلاص',
   },
   // Tenant Portal
   tenantPortal: {

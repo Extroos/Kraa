@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import { useAppContext } from '../hooks/useAppContext';
 import { getPaymentStatus } from '../store/AppLogic';
-import { ArrowLeft, CheckCircle2, Clock, AlertCircle, Archive, Printer, RotateCcw, X, Layers, Split, Scissors, Plus, DollarSign, FileText } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Clock, AlertCircle, Archive, Printer, RotateCcw, X, Layers, Split, Scissors, Plus, DollarSign, FileText, Calendar } from 'lucide-react';
 import { format, parseISO, isBefore, startOfDay, isValid, differenceInMonths, addMonths, subDays, differenceInDays } from 'date-fns';
 import { RecordPaymentModal } from '../components/RecordPaymentModal';
 import { PaymentMethod, Payment } from '../types';
@@ -166,7 +166,9 @@ export const TenantProfile: React.FC = () => {
       case 'paid':
         return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"><CheckCircle2 className="w-3 h-3"/> {t.dashboard.paid}</span>;
       case 'due':
-        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800"><Clock className="w-3 h-3"/> {t.dashboard.unpaid}</span>;
+        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800"><Clock className="w-3 h-3"/> {t.dashboard.dueSoon}</span>;
+      case 'unpaid':
+        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-neutral-100 text-neutral-500 border border-neutral-200"><Calendar className="w-3 h-3"/> {t.dashboard.unpaid}</span>;
       case 'late':
         return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800"><AlertCircle className="w-3 h-3"/> {t.dashboard.late}</span>;
       default:
@@ -313,7 +315,7 @@ export const TenantProfile: React.FC = () => {
               <div className="flex items-center gap-1.5 mt-1 sm:mt-0.5">
                 {tenantWithStatus.daysRemaining > 0 ? (
                   <>
-                    <Clock size={12} className={`shrink-0 ${tenantWithStatus.daysRemaining <= 7 ? 'text-warning-500' : 'text-success-500'}`} />
+                    <Clock size={12} className={`shrink-0 ${tenantWithStatus.daysRemaining <= 3 ? 'text-warning-500' : 'text-success-500'}`} />
                     <span className="text-[10px] sm:text-sm font-bold text-neutral-800 tabular-nums">
                       {t.tenantProfile.daysLeft.replace('{days}', tenantWithStatus.daysRemaining.toString())}
                     </span>
@@ -337,7 +339,7 @@ export const TenantProfile: React.FC = () => {
               <div 
                 className={`h-full rounded-full transition-all duration-700 ${
                   tenantWithStatus.daysRemaining < 0 ? 'bg-danger-500' : 
-                  tenantWithStatus.daysRemaining <= 7 ? 'bg-warning-500' : 'bg-success-500'
+                  tenantWithStatus.daysRemaining <= 3 ? 'bg-warning-500' : 'bg-success-500'
                 }`}
                 style={{ 
                   width: tenantWithStatus.daysRemaining < 0 ? '100%' : 
@@ -566,6 +568,8 @@ export const TenantProfile: React.FC = () => {
                             <CheckCircle2 size={16} className="text-success-500" />
                           ) : status === 'due' ? (
                             <Clock size={16} className="text-warning-500" />
+                          ) : status === 'unpaid' ? (
+                            <Calendar size={16} className="text-neutral-400" />
                           ) : (
                             <AlertCircle size={16} className="text-danger-500" />
                           )}
@@ -695,7 +699,7 @@ export const TenantProfile: React.FC = () => {
         }}
         onConfirm={handleConfirmPayment}
         tenantName={tenant.name}
-        totalAmount={selectedPayments.length > 0 ? bulkTotal : yearPayments.find(p => p.id === selectedPaymentId)?.amount}
+        totalAmount={selectedPayments.length > 0 ? bulkTotal : (yearPayments.find(p => p.id === selectedPaymentId)?.amount || tenant.rentAmount)}
         monthCount={selectedPayments.length > 0 ? selectedPayments.length : 1}
       />
 

@@ -38,7 +38,7 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
 
   // Update paidAmount if totalAmount changes (e.g. when opening for a new payment)
   React.useEffect(() => {
-    if (totalAmount) {
+    if (totalAmount !== undefined) {
       setPaidAmount(totalAmount.toString());
     }
   }, [totalAmount]);

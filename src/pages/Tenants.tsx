@@ -68,7 +68,7 @@ export const Tenants: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
-  const [selectedPayment, setSelectedPayment] = useState<{ id: string; tenantName: string } | null>(null);
+  const [selectedPayment, setSelectedPayment] = useState<{ id: string; tenantName: string; amount: number } | null>(null);
 
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [tenantToDelete, setTenantToDelete] = useState<string | null>(null);
@@ -198,6 +198,8 @@ export const Tenants: React.FC = () => {
         return <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-warning-500/10 text-warning-600 border border-warning-500/20">{t.dashboard.dueSoon}</span>;
       case 'late':
         return <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-danger-500/10 text-danger-500 border border-danger-500/20">{t.dashboard.late}</span>;
+      case 'unpaid':
+        return <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-neutral-100 text-neutral-500 border border-neutral-200">{t.dashboard.unpaid}</span>;
       default:
         return null;
     }
@@ -212,8 +214,8 @@ export const Tenants: React.FC = () => {
     }
   };
 
-  const handleMarkAsPaidClick = (paymentId: string, tenantName: string) => {
-    setSelectedPayment({ id: paymentId, tenantName });
+  const handleMarkAsPaidClick = (paymentId: string, tenantName: string, amount: number) => {
+    setSelectedPayment({ id: paymentId, tenantName, amount });
     setPaymentModalOpen(true);
   };
 
@@ -321,6 +323,7 @@ export const Tenants: React.FC = () => {
             { id: 'all', label: t.tenants.allActive, icon: Users },
             { id: 'late', label: t.dashboard.late, icon: AlertCircle },
             { id: 'due', label: t.dashboard.dueSoon, icon: Clock },
+            { id: 'unpaid', label: t.dashboard.unpaid, icon: Calendar },
             { id: 'paid', label: t.dashboard.paid, icon: CheckCircle2 },
           ].map(filter => {
             const count = tenantsWithStatus.filter(tData => filter.id === 'all' ? true : tData.status === filter.id).length;
@@ -424,7 +427,7 @@ export const Tenants: React.FC = () => {
                             <Button 
                               variant="primary"
                               size="sm"
-                              onClick={() => handleMarkAsPaidClick(tenant.nextPaymentId!, tenant.name)}
+                              onClick={() => handleMarkAsPaidClick(tenant.nextPaymentId!, tenant.name, tenant.rentAmount)}
                               className="bg-neutral-900 hover:bg-black text-white px-6 h-10 font-black text-[10px] uppercase tracking-widest ms-1 shadow-sm"
                             >
                               {t.tenants.pay}
@@ -449,7 +452,7 @@ export const Tenants: React.FC = () => {
                         {getStatusBadge(tenant.status)}
                         <span className={`text-[10px] font-bold mt-1.5 uppercase tracking-tighter tabular-nums ${
                           tenant.daysRemaining < 0 ? 'text-danger-600' : 
-                          tenant.daysRemaining <= 7 ? 'text-warning-600' : 'text-neutral-400'
+                          tenant.daysRemaining <= 3 ? 'text-warning-600' : 'text-neutral-400'
                         }`}>
                           {tenant.daysRemaining < 0 ? t.tenants.lateLabel.replace('{days}', Math.abs(tenant.daysRemaining).toString()) :
                            tenant.daysRemaining === 0 ? t.tenants.today : t.tenants.leftLabel.replace('{days}', tenant.daysRemaining.toString())}
@@ -505,7 +508,7 @@ export const Tenants: React.FC = () => {
                     {getStatusBadge(tenant.status)}
                     <span className={`text-[8px] font-bold uppercase tracking-widest ${
                       tenant.daysRemaining < 0 ? 'text-danger-600' : 
-                      tenant.daysRemaining <= 7 ? 'text-warning-600' : 'text-neutral-400'
+                      tenant.daysRemaining <= 3 ? 'text-warning-600' : 'text-neutral-400'
                     }`}>
                       {tenant.daysRemaining < 0 ? `${Math.abs(tenant.daysRemaining)}D` :
                        tenant.daysRemaining === 0 ? '0D' : `${tenant.daysRemaining}D`}
@@ -535,7 +538,7 @@ export const Tenants: React.FC = () => {
                   
                   {!isReadOnly && (
                     <button
-                      onClick={(e) => { e.stopPropagation(); handleMarkAsPaidClick(tenant.nextPaymentId!, tenant.name); }}
+                      onClick={(e) => { e.stopPropagation(); handleMarkAsPaidClick(tenant.nextPaymentId!, tenant.name, tenant.rentAmount); }}
                       className="w-10 h-10 flex items-center justify-center bg-primary-600 border border-primary-600 text-white rounded-lg hover:bg-primary-700 shadow-sm transition-all shrink-0"
                     >
                       <DollarSign size={20} strokeWidth={2.5} />
@@ -565,7 +568,7 @@ export const Tenants: React.FC = () => {
         }}
         onConfirm={handleConfirmPayment}
         tenantName={pendingBulkPayments.length > 0 ? (bulkTenant?.name || '') : (selectedPayment?.tenantName || '')}
-        totalAmount={pendingBulkPayments.length > 0 ? (pendingBulkPayments.length * (bulkTenant?.rentAmount || 0)) : undefined}
+        totalAmount={pendingBulkPayments.length > 0 ? (pendingBulkPayments.length * (bulkTenant?.rentAmount || 0)) : selectedPayment?.amount}
         monthCount={pendingMonthCount > 0 ? pendingMonthCount : (pendingBulkPayments.length > 0 ? (pendingBulkPayments.length * getCycleMonths(bulkTenant?.paymentCycle || 'monthly')) : undefined)}
         privacyMode={privacyMode}
       />

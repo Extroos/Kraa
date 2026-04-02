@@ -21,7 +21,8 @@ import {
   Maximize, 
   Minimize,
   Eye,
-  RotateCcw
+  RotateCcw,
+  CheckCircle
 } from 'lucide-react';
 
 export const ReceiptPreview: React.FC = () => {
@@ -292,13 +293,18 @@ export const ReceiptPreview: React.FC = () => {
         }
       });
     } else if (field === 'background') {
+      // Background size is now master-controlled by paper size
+      // We only allow x/y position adjustments for nudging
+      if (type === 'width' || type === 'height') return;
+      
       const pos = tempLayout.bgPosition || DEFAULT_RECEIPT_LAYOUT.bgPosition;
+      const key = type as keyof LayoutPosition;
       setTempLayout({
         ...tempLayout,
         bgPosition: {
           ...pos,
-          [type]: Math.round((((pos as any)[type] || (type === 'width' ? 165 : 103)) + delta) * 10) / 10
-        }
+          [key]: Math.round((((pos as any)[key] || 0) + delta) * 10) / 10
+        } as LayoutPosition
       });
     } else if (activeField && activeField !== 'backgroundImage') {
       const pos = tempLayout[activeField as keyof ReceiptLayout] as LayoutPosition;
@@ -323,7 +329,6 @@ export const ReceiptPreview: React.FC = () => {
     }).sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month);
   }, [paymentList]);
 
-  const totalAmountValue = useMemo(() => paymentList.reduce((sum, p) => sum + p.amount, 0), [paymentList]);
   const arabicMonths = ["يناير", "فبراير", "مارس", "أبريل", "ماي", "يونيو", "يوليوز", "غشت", "شتنبر", "أكتوبر", "نونبر", "دجنبر"];
   
   const monthCount = useMemo(() => {
@@ -340,6 +345,16 @@ export const ReceiptPreview: React.FC = () => {
     });
     return total || 1;
   }, [paymentList]);
+
+  const isPaid = useMemo(() => paymentList.some(p => !!p.datePaid), [paymentList]);
+  
+  const totalAmountValue = useMemo(() => {
+    if (isPaid) {
+      return paymentList.reduce((sum, p) => sum + (p.paidAmount ?? p.amount), 0);
+    }
+    // If unpaid/revoked, use LIVE rent from tenant record for preview
+    return (tenant?.rentAmount || 0) * monthCount;
+  }, [paymentList, isPaid, tenant?.rentAmount, monthCount]);
 
   const baseRent = useMemo(() => Math.round(totalAmountValue / monthCount), [totalAmountValue, monthCount]);
 
@@ -735,8 +750,8 @@ export const ReceiptPreview: React.FC = () => {
                 style={{
                     left: `${displayLayout.bgPosition?.x || 0}mm`,
                     top: `${displayLayout.bgPosition?.y || 0}mm`,
-                    width: `${displayLayout.bgPosition?.width || (displayLayout.pageSize?.width || 165)}mm`,
-                    height: `${displayLayout.bgPosition?.height || (displayLayout.pageSize?.height || 103)}mm`,
+                    width: `${displayLayout.pageSize?.width || 165}mm`,
+                    height: `${displayLayout.pageSize?.height || 103}mm`,
                     pointerEvents: isDesigning && !isImageLocked ? 'auto' : 'none',
                     cursor: isDesigning && !isImageLocked ? 'move' : 'default',
                     zIndex: isDesigning && !isImageLocked ? 10 : 0
@@ -744,7 +759,7 @@ export const ReceiptPreview: React.FC = () => {
                 onMouseDown={(e: React.MouseEvent) => handleDragStart(e, 'backgroundImage')}
                 onTouchStart={(e: React.TouchEvent) => handleTouchStart(e, 'backgroundImage')}
             >
-              <img src={displayLayout.bgImage || '/kra.jpg'} alt="Template" className="w-full h-full object-cover" />
+              <img src={displayLayout.bgImage || '/kra.jpg'} alt="Template" className="w-full h-full object-fill" />
               
               {isDesigning && activeField === 'backgroundImage' && (
                 <div className="absolute inset-0 ring-4 ring-warning-500/50 bg-warning-500/5 flex items-center justify-center">
@@ -757,9 +772,9 @@ export const ReceiptPreview: React.FC = () => {
 
             {renderField('tenantName', tenant.nameAr || tenant.name, '', true)}
             {renderField('propertyAddress', property.addressAr || property.address, '', true)}
-            {renderField('amountNumbers', tenant.rentAmount || baseRent)}
+            {renderField('amountNumbers', payment.paidAmount ?? payment.amount)}
             {renderField('totalAmountNumbers', totalAmountValue)}
-            {renderField('amountLetters', totalAmountValue > 0 ? (totalAmountValue === tenant.rentAmount ? (tenant.rentAmountArText || numberToArabicWords(totalAmountValue)) : numberToArabicWords(totalAmountValue)) : '', '', true)}
+            {renderField('amountLetters', totalAmountValue > 0 ? numberToArabicWords(totalAmountValue) : '', '', true)}
             {renderField('monthYear', arabicMonthYear, '', true)}
             {renderField('periodStart', formatDateFR(safeStartDate))}
             {renderField('periodEnd', formatDateFR(safeEndDate))}
@@ -792,20 +807,21 @@ export const ReceiptPreview: React.FC = () => {
         )}
       </div>
 
-      {/* Designer Instruction Cards (Desktop Only) */}
-      {isDesigning && (
-        <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 designer-overlay hidden sm:block">
-          <div className="bg-neutral-900 border border-neutral-800 text-white px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-6">
-            <div className={`flex items-center gap-3 ${isRTL ? 'flex-row-reverse text-right' : ''}`}>
-              <div className="w-10 h-10 rounded-xl bg-primary-500/10 flex items-center justify-center">
-                 <Move className="w-5 h-5 text-primary-400" />
-              </div>
-              <span className="text-xs font-black uppercase tracking-widest">{t.receipt.alignmentActive}</span>
-            </div>
-            <div className="h-6 w-px bg-neutral-700" />
-            <p className={`text-[11px] font-medium text-neutral-400 leading-normal max-w-xs ${isRTL ? 'text-right' : ''}`}>
-              {t.receipt.alignmentGuide}
-            </p>
+      {/* Persistent Status Indicator - Bottom Left */}
+      {isPaid && (
+        <div className="fixed bottom-8 left-8 z-50 print:hidden pointer-events-none sm:pointer-events-auto">
+          <div className="bg-white border-2 border-success-600 shadow-xl rounded-xl px-5 py-3 flex items-center gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+             <div className="bg-success-50 p-2 rounded-lg">
+                <CheckCircle className="w-5 h-5 text-success-600" strokeWidth={3} />
+             </div>
+             <div className="flex flex-col border-l border-neutral-100 pl-4">
+               <span className="text-success-900 font-black text-xs uppercase tracking-tight">
+                 {t.receipt.paidStatus}
+               </span>
+               <span className="text-neutral-400 text-[9px] font-bold uppercase tracking-widest leading-none mt-1">
+                 Official Audit Record
+               </span>
+             </div>
           </div>
         </div>
       )}

@@ -862,8 +862,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       let status: PaymentStatus = 'paid';
       if (firstUnpaid) {
         if (isValid(nextDueDate)) {
-          if (isBefore(nextDueDate, today)) status = 'late';
-          else status = 'due';
+          if (isBefore(nextDueDate, today)) {
+            status = 'late';
+          } else if (differenceInDays(nextDueDate, today) <= 3) {
+            status = 'due';
+          } else {
+            // For tenants who pay at the start of the month, being in a "pending" 
+            // state for a future month is considered "Paid" (up to date).
+            // For tenants who pay at the end, it stays as "Unpaid" during the month.
+            status = tenant.paymentDay === 'first' ? 'paid' : 'unpaid';
+          }
         }
       }
       
