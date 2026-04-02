@@ -24,6 +24,7 @@ import {
   RotateCcw,
   CheckCircle
 } from 'lucide-react';
+import { getLocalReceiptTemplate } from '../utils/localImage';
 
 export const ReceiptPreview: React.FC = () => {
   const { paymentId } = useParams<{ paymentId: string }>();
@@ -39,7 +40,8 @@ export const ReceiptPreview: React.FC = () => {
     receiptLayout, 
     saveReceiptLayout, 
     updateReceipt,
-    updateLandlordActivity 
+    updateLandlordActivity,
+    effectiveOwnerId 
   } = useAppContext();
   const { t, isRTL } = useTranslation();
 
@@ -78,6 +80,36 @@ export const ReceiptPreview: React.FC = () => {
     } as ReceiptLayout;
   }, [receiptLayout]);
 
+  const [displayLayout, setDisplayLayout] = useState<ReceiptLayout>(currentLayout);
+
+  useEffect(() => {
+    const init = async () => {
+      if (receiptLayout) {
+        let layoutToUse = { ...receiptLayout };
+        
+        // If it's a local template, try to fetch it from device storage
+        if (layoutToUse.bgImage === 'local:custom_template' && effectiveOwnerId) {
+          const localBase64 = await getLocalReceiptTemplate(effectiveOwnerId);
+          if (localBase64) {
+            layoutToUse.bgImage = localBase64;
+          } else {
+            // Fallback if not found on this device
+            layoutToUse.bgImage = '/kra.jpg';
+          }
+        } else if (!layoutToUse.bgImage) {
+          layoutToUse.bgImage = '/kra.jpg';
+        }
+        
+        // Only update displayLayout (for non-design mode)
+        if (!isDesigning) setDisplayLayout(layoutToUse);
+      } else {
+        // Ensure default layout is set even if no custom layout exists yet
+        if (!isDesigning) setDisplayLayout(currentLayout);
+      }
+    };
+    init();
+  }, [receiptLayout, isDesigning, effectiveOwnerId, currentLayout]);
+
   const receipt = useMemo(() => {
     if (!paymentId) return null;
     const ids = paymentId.split(',');
@@ -93,7 +125,7 @@ export const ReceiptPreview: React.FC = () => {
 
   useEffect(() => {
     const updateScale = () => {
-      const pageWidthMm = currentLayout.pageSize?.width || 165;
+      const pageWidthMm = displayLayout.pageSize?.width || 165;
       const pageWidthPx = pageWidthMm * 3.7795275591; // Convert mm to px approx
       const availableWidth = window.innerWidth - 32; // Margin
       
@@ -107,7 +139,7 @@ export const ReceiptPreview: React.FC = () => {
     updateScale();
     window.addEventListener('resize', updateScale);
     return () => window.removeEventListener('resize', updateScale);
-  }, [currentLayout]);
+  }, [displayLayout]);
 
   // Keyboard shortcuts for designer
   useEffect(() => {
@@ -292,14 +324,23 @@ export const ReceiptPreview: React.FC = () => {
   const handleSaveLayout = async () => {
     if (tempLayout) {
       setLoading(true);
-      await saveReceiptLayout(tempLayout, bgFile || undefined);
-      // Give standard Firestore latency some room to reflect in state
-      setTimeout(() => {
-        setIsDesigning(false);
-        setTempLayout(null);
-        setBgFile(null);
+      try {
+        await saveReceiptLayout(tempLayout, bgFile || undefined);
+        
+        // Give standard Firestore latency some room to reflect in state
+        setTimeout(() => {
+          setIsDesigning(false);
+          setTempLayout(null);
+          setBgFile(null);
+          setLoading(false);
+        }, 300);
+      } catch (err) {
+        console.error("Failed to save receipt layout:", err);
         setLoading(false);
-      }, 300);
+      } finally {
+        // Double check loading is false if timeout logic fails for some reason
+        // although setTimeout is the preferred UX here to prevent flicker
+      }
     }
   };
 
@@ -469,8 +510,6 @@ export const ReceiptPreview: React.FC = () => {
   const safeEndDate = isValid(endDate) ? endDate : new Date();
   const safePaymentDate = isValid(paymentDate) ? paymentDate : new Date();
 
-  const displayLayout = isDesigning ? tempLayout || currentLayout : currentLayout;
-
   const handleTouchStart = (e: React.TouchEvent, field: keyof Omit<ReceiptLayout, 'id' | 'ownerId' | 'lastUpdated'> | 'backgroundImage') => {
     if (!isDesigning) return;
     if (field === 'backgroundImage' && isImageLocked) return;
@@ -522,7 +561,7 @@ export const ReceiptPreview: React.FC = () => {
   };
 
   const renderField = (field: keyof Omit<ReceiptLayout, 'id' | 'ownerId' | 'lastUpdated'>, content: string | number, extraClass = '', isRtl = false) => {
-    const pos = displayLayout[field] as LayoutPosition;
+    const pos = (isDesigning ? tempLayout : displayLayout)![field] as LayoutPosition;
     const fontSize = pos.fontSize || 14;
     const isOverridden = receipt?.customFields && receipt.customFields[field];
     const displayContent = isOverridden ? receipt.customFields![field] : content;
@@ -532,7 +571,7 @@ export const ReceiptPreview: React.FC = () => {
         className={`receipt-field cursor-move select-none group touch-none ${extraClass} ${
           isDesigning && activeField === field ? 'ring-2 ring-primary-500 z-50' : ''
         } ${isDesigning ? 'hover:bg-primary-500/5 transition-colors' : ''} ${
-          isEditingText ? 'hover:ring-2 hover:ring-warning-400 hover:bg-warning-50/30 cursor-pointer ring-1 ring-dashed ring-neutral-200' : ''
+          isEditingText ? 'cursor-pointer' : ''
         } ${isOverridden ? 'text-primary-700' : ''}`}
         style={{ 
           left: `${pos.x}mm`, 
@@ -542,17 +581,15 @@ export const ReceiptPreview: React.FC = () => {
         dir={isRtl ? 'rtl' : 'ltr'}
         onMouseDown={(e) => handleDragStart(e, field)}
         onTouchStart={(e) => handleTouchStart(e, field)}
-        onClick={() => handleFieldEdit(field as keyof ReceiptLayout, content)}
       >
+        <div
+          className={`absolute inset-0 z-20 group transition-all duration-300 ${isEditingText ? 'cursor-pointer' : ''}`}
+          onClick={() => handleFieldEdit(field as keyof ReceiptLayout, content)}
+        />
         {displayContent}
         {isDesigning && (
           <div className="absolute -top-6 left-0 text-[10px] font-bold bg-primary-600 text-white px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 pointer-events-none uppercase tracking-tighter">
             {pos.x}mm , {pos.y}mm
-          </div>
-        )}
-        {isEditingText && (
-          <div className="absolute -bottom-4 right-0 text-[8px] font-bold bg-warning-600 text-white px-1 py-0.5 rounded opacity-0 group-hover:opacity-100 pointer-events-none uppercase">
-            Edit
           </div>
         )}
       </div>
@@ -805,6 +842,7 @@ export const ReceiptPreview: React.FC = () => {
 
       {/* Main Preview Container - Scalable & Swipeable */}
       <div className={`w-full flex-1 flex flex-col items-center pt-16 sm:pt-4 ${!isZoomed && !isDesigning ? 'overflow-hidden' : ''}`}>
+        
         {/* Sliding Viewport for Horizontal Support & Centering */}
         <div className={`w-full max-w-full moving-viewport ${isDesigning ? 'designer-active-viewport' : ''}`}>
           
@@ -823,10 +861,10 @@ export const ReceiptPreview: React.FC = () => {
             <div 
                 className={`absolute select-none overflow-hidden background-guide print:hidden ${isDesigning ? 'opacity-40' : 'opacity-25'}`}
                 style={{
-                    left: `${displayLayout.bgPosition?.x || 0}mm`,
-                    top: `${displayLayout.bgPosition?.y || 0}mm`,
-                    width: `${displayLayout.pageSize?.width || 165}mm`,
-                    height: `${displayLayout.pageSize?.height || 103}mm`,
+                    left: `${(isDesigning ? tempLayout : displayLayout).bgPosition?.x || 0}mm`,
+                    top: `${(isDesigning ? tempLayout : displayLayout).bgPosition?.y || 0}mm`,
+                    width: `${(isDesigning ? tempLayout : displayLayout).pageSize?.width || 165}mm`,
+                    height: `${(isDesigning ? tempLayout : displayLayout).pageSize?.height || 103}mm`,
                     pointerEvents: isDesigning && !isImageLocked ? 'auto' : 'none',
                     cursor: isDesigning && !isImageLocked ? 'move' : 'default',
                     zIndex: isDesigning && !isImageLocked ? 10 : 0
@@ -834,7 +872,7 @@ export const ReceiptPreview: React.FC = () => {
                 onMouseDown={(e: React.MouseEvent) => handleDragStart(e, 'backgroundImage')}
                 onTouchStart={(e: React.TouchEvent) => handleTouchStart(e, 'backgroundImage')}
             >
-              <img src={displayLayout.bgImage || '/kra.jpg'} alt="Template" className="w-full h-full object-fill" />
+              <img src={(isDesigning ? tempLayout : displayLayout).bgImage || '/kra.jpg'} alt="Template" className="w-full h-full object-fill" />
               
               {isDesigning && activeField === 'backgroundImage' && (
                 <div className="absolute inset-0 ring-4 ring-warning-500/50 bg-warning-500/5 flex items-center justify-center">

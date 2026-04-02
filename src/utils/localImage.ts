@@ -2,6 +2,7 @@ import { Preferences } from '@capacitor/preferences';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 
 const STORAGE_PREFIX = 'cheque_image_';
+const RECEIPT_PREFIX = 'receipt_template_';
 const IMAGE_DIR = Directory.Data;
 
 /**
@@ -77,6 +78,39 @@ export const removeLocalChequeImage = async (paymentId: string): Promise<void> =
         });
     } catch (error) {
         console.error('Error removing local cheque image:', error);
+    }
+};
+
+/**
+ * Stores a base64 receipt template locally.
+ */
+export const storeLocalReceiptTemplate = async (ownerId: string, base64Data: string): Promise<void> => {
+    try {
+        await Filesystem.writeFile({
+            path: `${RECEIPT_PREFIX}${ownerId}.txt`,
+            data: base64Data,
+            directory: IMAGE_DIR,
+            encoding: Encoding.UTF8,
+            recursive: true
+        });
+    } catch (error) {
+        console.error('Error storing local receipt template:', error);
+    }
+};
+
+/**
+ * Retrieves a locally stored base64 receipt template.
+ */
+export const getLocalReceiptTemplate = async (ownerId: string): Promise<string | null> => {
+    try {
+        const result = await Filesystem.readFile({
+            path: `${RECEIPT_PREFIX}${ownerId}.txt`,
+            directory: IMAGE_DIR,
+            encoding: Encoding.UTF8
+        });
+        return result.data as string;
+    } catch (error) {
+        return null;
     }
 };
 

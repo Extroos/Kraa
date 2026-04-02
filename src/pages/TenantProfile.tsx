@@ -521,7 +521,7 @@ export const TenantProfile: React.FC = () => {
                   return (
                     <tr key={item.id} className={`hover:bg-neutral-50/50 transition-colors ${selectedPayments.includes(payment.id) ? 'bg-primary-50' : ''} ${isGroup ? 'bg-primary-50/30' : ''}`}>
                       <td className="px-2 sm:px-6 py-4 whitespace-nowrap">
-                        {!isGroup && !payment.datePaid && !isHistorical && !isArchived && !isReadOnly ? (
+                        {!isGroup && !payment.datePaid && !isArchived && !isReadOnly ? (
                           <input 
                             type="checkbox" 
                             checked={selectedPayments.includes(payment.id)}
@@ -624,7 +624,7 @@ export const TenantProfile: React.FC = () => {
                               )}
                             </>
                           ) : (
-                            !isHistorical && !isArchived ? (
+                            !isArchived ? (
                               <>
                                 <button
                                   onClick={() => {

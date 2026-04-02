@@ -37,6 +37,12 @@ import {
   uploadBytes, 
   getDownloadURL 
 } from 'firebase/storage';
+import { 
+  isNativeMobile, 
+  getLocalChequeImage, 
+  storeLocalChequeImage,
+  storeLocalReceiptTemplate 
+} from '../utils/localImage';
 import { useAuth } from './AuthContext';
 import { FIREBASE_COLLECTIONS } from '../config/constants';
 import { OperationType } from '../types';
@@ -946,10 +952,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       let bgImage = layout.bgImage || state.receiptLayout?.bgImage;
       
+      // If a new file is uploaded, store it LOCALLY only as requested
       if (bgFile) {
-        const storageRef = ref(storage, `layouts/${effectiveOwnerId}/template_${Date.now()}`);
-        await uploadBytes(storageRef, bgFile);
-        bgImage = await getDownloadURL(storageRef);
+        const reader = new FileReader();
+        const base64Promise = new Promise<string>((resolve, reject) => {
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(bgFile);
+        });
+        
+        const base64 = await base64Promise;
+        await storeLocalReceiptTemplate(effectiveOwnerId, base64);
+        bgImage = 'local:custom_template';
+      } else if (bgImage && bgImage.startsWith('data:')) {
+        // Migration: If we already have a base64 string in memory but no file, move it to local storage
+        await storeLocalReceiptTemplate(effectiveOwnerId, bgImage);
+        bgImage = 'local:custom_template';
       }
       
       const layoutData = { 
@@ -1840,6 +1858,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deleteExpense, 
       getPropertyFinancials, 
       profitFocusMode, 
+      effectiveOwnerId,
       toggleProfitFocusMode, 
       privacyMode, 
       togglePrivacyMode,
