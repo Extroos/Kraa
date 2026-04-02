@@ -160,6 +160,12 @@ export interface ReceiptLayout {
   propertyType: LayoutPosition;
   tenantReceiptNumber: LayoutPosition;
   lastUpdated: string;
+  customItems?: CustomLayoutItem[];
+}
+
+export interface CustomLayoutItem extends LayoutPosition {
+  id: string;
+  text: string;
 }
 
 export interface TenantWithStatus extends Tenant {

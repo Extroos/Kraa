@@ -1901,4 +1901,5 @@ export const DEFAULT_RECEIPT_LAYOUT = {
   paymentPlace: { x: 30, y: 72, fontSize: 14 },
   propertyType: { x: 105, y: 50, fontSize: 14 },
   tenantReceiptNumber: { x: 145, y: 20, fontSize: 14 },
+  customItems: [],
 };

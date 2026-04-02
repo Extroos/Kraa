@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import { useAppContext } from '../hooks/useAppContext';
 import { format, parseISO, isValid, addMonths } from 'date-fns';
-import { Receipt, Payment, ReceiptLayout, LayoutPosition } from '../types';
+import { Receipt, Payment, ReceiptLayout, LayoutPosition, CustomLayoutItem } from '../types';
 import { Button } from '../components/ui';
 import { DEFAULT_RECEIPT_LAYOUT } from '../store/AppProvider';
 import { numberToArabicWords } from '../utils/arabic';
@@ -22,7 +23,9 @@ import {
   Minimize,
   Eye,
   RotateCcw,
-  CheckCircle
+  CheckCircle,
+  Plus,
+  Trash2
 } from 'lucide-react';
 import { getLocalReceiptTemplate } from '../utils/localImage';
 
@@ -54,7 +57,7 @@ export const ReceiptPreview: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isEditingText, setIsEditingText] = useState(false);
-  const [editingField, setEditingField] = useState<keyof ReceiptLayout | null>(null);
+  const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const initialized = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -68,7 +71,7 @@ export const ReceiptPreview: React.FC = () => {
   const [isDesigning, setIsDesigning] = useState(false);
   const [tempLayout, setTempLayout] = useState<ReceiptLayout | null>(null);
   const [isImageLocked, setIsImageLocked] = useState(true);
-  const [activeField, setActiveField] = useState<keyof Omit<ReceiptLayout, 'id' | 'ownerId' | 'lastUpdated'> | 'backgroundImage' | null>(null);
+  const [activeField, setActiveField] = useState<string | null>(null);
   const [dragStart, setDragStart] = useState<{ x: number, y: number } | null>(null);
   const currentLayout = useMemo(() => {
     if (!receiptLayout) return DEFAULT_RECEIPT_LAYOUT as unknown as ReceiptLayout;
@@ -165,7 +168,17 @@ export const ReceiptPreview: React.FC = () => {
   const adjustPosition = (key: string, step: number) => {
     if (!tempLayout || !activeField) return;
     const isBg = activeField === 'backgroundImage';
-    const target = isBg ? tempLayout.bgPosition : (tempLayout[activeField as keyof ReceiptLayout] as LayoutPosition);
+    const isCustom = activeField.startsWith('custom_');
+    
+    let target: LayoutPosition;
+    if (isCustom) {
+      const customId = activeField.replace('custom_', '');
+      const item = tempLayout.customItems?.find(i => i.id === customId);
+      if (!item) return;
+      target = item;
+    } else {
+      target = isBg ? tempLayout.bgPosition || DEFAULT_RECEIPT_LAYOUT.bgPosition : (tempLayout[activeField as keyof ReceiptLayout] as LayoutPosition);
+    }
     
     const newPos = { ...target };
     if (key === 'ArrowUp') newPos.y -= step;
@@ -173,10 +186,18 @@ export const ReceiptPreview: React.FC = () => {
     if (key === 'ArrowLeft') newPos.x -= step;
     if (key === 'ArrowRight') newPos.x += step;
 
-    setTempLayout({
-      ...tempLayout,
-      [isBg ? 'bgPosition' : activeField]: newPos
-    });
+    if (isCustom) {
+      const customId = activeField.replace('custom_', '');
+      setTempLayout({
+        ...tempLayout,
+        customItems: tempLayout.customItems?.map(i => i.id === customId ? { ...i, ...newPos } : i)
+      });
+    } else {
+      setTempLayout({
+        ...tempLayout,
+        [isBg ? 'bgPosition' : activeField]: newPos
+      });
+    }
   };
 
   const tenantPaymentIndex = useMemo(() => {
@@ -229,8 +250,20 @@ export const ReceiptPreview: React.FC = () => {
 
       setPaymentList(foundPayments);
       initialized.current = true;
+      
+      // Ensure the target payment actually exists in our state before calling generate
+      const targetId = ids[0];
+      const hasPayment = foundPayments.some(p => p.id === targetId) || payments.some(p => p.id === targetId);
+      
+      if (!hasPayment) {
+        console.error("Target payment not found in locally fetched lists:", targetId);
+        setError(t.receipt.failedLoad);
+        setLoading(false);
+        return;
+      }
+
       try {
-        await generateReceipt(ids[0]);
+        await generateReceipt(targetId);
         setLoading(false);
       } catch (err) {
         console.error("Failed to generate receipt:", err);
@@ -242,13 +275,16 @@ export const ReceiptPreview: React.FC = () => {
     initReceipt();
   }, [paymentId, payments, tenants, properties, generateReceipt, fetchTenantPayments, t]);
 
-  const handleDragStart = (e: React.MouseEvent, field: keyof Omit<ReceiptLayout, 'id' | 'ownerId' | 'lastUpdated'> | 'backgroundImage') => {
+  const handleDragStart = (e: React.MouseEvent | React.TouchEvent, field: string) => {
     if (!isDesigning) return;
     if (field === 'backgroundImage' && isImageLocked) return;
     
     e.preventDefault();
     setActiveField(field);
-    setDragStart({ x: e.clientX, y: e.clientY });
+    
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    setDragStart({ x: clientX, y: clientY });
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
@@ -271,6 +307,16 @@ export const ReceiptPreview: React.FC = () => {
           x: Math.round((currentPos.x + dxMm) * 10) / 10,
           y: Math.round((currentPos.y + dyMm) * 10) / 10
         }
+      });
+    } else if (activeField.startsWith('custom_')) {
+      const customId = activeField.replace('custom_', '');
+      setTempLayout({
+        ...tempLayout,
+        customItems: tempLayout.customItems?.map(i => 
+          i.id === customId 
+            ? { ...i, x: Math.round((i.x + dxMm) * 10) / 10, y: Math.round((i.y + dyMm) * 10) / 10 } 
+            : i
+        )
       });
     } else {
       const currentPos = tempLayout[activeField as keyof ReceiptLayout] as LayoutPosition;
@@ -306,9 +352,17 @@ export const ReceiptPreview: React.FC = () => {
     }
   };
 
-  const handleResetLayout = () => {
+  const handleResetLayout = async () => {
     if (window.confirm(t.receipt.resetLayout)) {
-      setTempLayout(DEFAULT_RECEIPT_LAYOUT as unknown as ReceiptLayout);
+      const resetLayout = { ...DEFAULT_RECEIPT_LAYOUT } as unknown as ReceiptLayout;
+      
+      // Resolve local image if necessary
+      if (resetLayout.bgImage === 'local:custom_template' && effectiveOwnerId) {
+        const localBase64 = await getLocalReceiptTemplate(effectiveOwnerId);
+        if (localBase64) resetLayout.bgImage = localBase64;
+      }
+      
+      setTempLayout(resetLayout);
       setBgFile(null);
     }
   };
@@ -319,6 +373,32 @@ export const ReceiptPreview: React.FC = () => {
     if (e.target === e.currentTarget || (e.target as HTMLElement).classList.contains('design-grid') || (e.target as HTMLElement).classList.contains('print-container')) {
       setActiveField(null);
     }
+  };
+
+  const handleAddCustomText = () => {
+    if (!tempLayout) return;
+    const newId = uuidv4().substring(0, 8);
+    const newItem: CustomLayoutItem = {
+      id: newId,
+      text: 'Custom Text',
+      x: 10,
+      y: 10,
+      fontSize: 14
+    };
+    setTempLayout({
+      ...tempLayout,
+      customItems: [...(tempLayout.customItems || []), newItem]
+    });
+    setActiveField(`custom_${newId}`);
+  };
+
+  const handleRemoveCustomText = (id: string) => {
+    if (!tempLayout) return;
+    setTempLayout({
+      ...tempLayout,
+      customItems: tempLayout.customItems?.filter(i => i.id !== id)
+    });
+    if (activeField === `custom_${id}`) setActiveField(null);
   };
 
   const handleSaveLayout = async () => {
@@ -344,21 +424,43 @@ export const ReceiptPreview: React.FC = () => {
     }
   };
 
-  const handleFieldEdit = (field: keyof ReceiptLayout, currentContent: string | number) => {
+  const handleFieldEdit = (field: string, currentContent: string | number) => {
     if (!isEditingText || isDesigning) return;
     setEditingField(field);
     setEditValue(String(receipt?.customFields?.[field] || currentContent));
   };
 
+  const handleCustomItemEdit = (item: CustomLayoutItem) => {
+    if (!isEditingText || isDesigning) return;
+    setEditingField(`custom_${item.id}`);
+    setEditValue(item.text);
+  };
+
   const saveCustomField = async () => {
     if (!receipt || !editingField) return;
-    
-    const newCustomFields = {
-      ...(receipt.customFields || {}),
-      [editingField]: editValue
-    };
 
-    await updateReceipt(receipt.id, { customFields: newCustomFields });
+    if (editingField.startsWith('custom_')) {
+      const customId = editingField.replace('custom_', '');
+      const currentLayout = isDesigning ? tempLayout : receiptLayout;
+      if (!currentLayout) return;
+
+      const newItems = (currentLayout.customItems || []).map(i => 
+        i.id === customId ? { ...i, text: editValue } : i
+      );
+
+      await saveReceiptLayout({
+        ...currentLayout,
+        customItems: newItems
+      });
+    } else {
+      const newCustomFields = {
+        ...(receipt.customFields || {}),
+        [editingField]: editValue
+      };
+
+      await updateReceipt(receipt.id, { customFields: newCustomFields });
+    }
+
     setEditingField(null);
   };
 
@@ -388,17 +490,36 @@ export const ReceiptPreview: React.FC = () => {
           [key]: Math.round((((pos as any)[key] || 0) + delta) * 10) / 10
         } as LayoutPosition
       });
-    } else if (activeField && activeField !== 'backgroundImage') {
-      const pos = tempLayout[activeField as keyof ReceiptLayout] as LayoutPosition;
-      if (type === 'font') {
+    } else if (activeField) {
+      const isCustom = activeField.startsWith('custom_');
+      let pos: LayoutPosition | undefined;
+      
+      if (isCustom) {
+        const customId = activeField.replace('custom_', '');
+        pos = tempLayout.customItems?.find(i => i.id === customId);
+      } else if (activeField !== 'backgroundImage') {
+        pos = tempLayout[activeField as keyof ReceiptLayout] as LayoutPosition;
+      }
+
+      if (pos && type === 'font') {
         const currentSize = pos.fontSize || 14;
-        setTempLayout({
-          ...tempLayout,
-          [activeField]: {
-            ...pos,
-            fontSize: Math.max(8, Math.min(48, currentSize + delta))
-          }
-        });
+        const newSize = Math.max(8, Math.min(48, currentSize + delta));
+        
+        if (isCustom) {
+          const customId = activeField.replace('custom_', '');
+          setTempLayout({
+            ...tempLayout,
+            customItems: tempLayout.customItems?.map(i => i.id === customId ? { ...i, fontSize: newSize } : i)
+          });
+        } else {
+          setTempLayout({
+            ...tempLayout,
+            [activeField]: {
+              ...pos,
+              fontSize: newSize
+            }
+          });
+        }
       }
     }
   };
@@ -510,7 +631,7 @@ export const ReceiptPreview: React.FC = () => {
   const safeEndDate = isValid(endDate) ? endDate : new Date();
   const safePaymentDate = isValid(paymentDate) ? paymentDate : new Date();
 
-  const handleTouchStart = (e: React.TouchEvent, field: keyof Omit<ReceiptLayout, 'id' | 'ownerId' | 'lastUpdated'> | 'backgroundImage') => {
+  const handleTouchStart = (e: React.TouchEvent, field: string) => {
     if (!isDesigning) return;
     if (field === 'backgroundImage' && isImageLocked) return;
     
@@ -541,6 +662,16 @@ export const ReceiptPreview: React.FC = () => {
           y: Math.round((currentPos.y + dyMm) * 10) / 10
         }
       });
+    } else if (activeField.startsWith('custom_')) {
+      const customId = activeField.replace('custom_', '');
+      setTempLayout({
+        ...tempLayout,
+        customItems: tempLayout.customItems?.map(i => 
+          i.id === customId 
+            ? { ...i, x: Math.round((i.x + dxMm) * 10) / 10, y: Math.round((i.y + dyMm) * 10) / 10 } 
+            : i
+        )
+      });
     } else {
       const currentPos = tempLayout[activeField as keyof ReceiptLayout] as LayoutPosition;
       setTempLayout({
@@ -560,16 +691,27 @@ export const ReceiptPreview: React.FC = () => {
     setDragStart(null);
   };
 
-  const renderField = (field: keyof Omit<ReceiptLayout, 'id' | 'ownerId' | 'lastUpdated'>, content: string | number, extraClass = '', isRtl = false) => {
-    const pos = (isDesigning ? tempLayout : displayLayout)![field] as LayoutPosition;
+  const renderField = (field: string, content: string | number, extraClass = '', isRtl = false, customItem?: CustomLayoutItem) => {
+    const isCustom = !!customItem;
+    const fieldId = isCustom ? `custom_${customItem.id}` : field;
+    
+    const layout = isDesigning ? tempLayout : displayLayout;
+    if (!layout) return null;
+
+    const pos = isCustom 
+      ? customItem 
+      : (layout as any)[field] as LayoutPosition;
+
+    if (!pos) return null;
     const fontSize = pos.fontSize || 14;
-    const isOverridden = receipt?.customFields && receipt.customFields[field];
-    const displayContent = isOverridden ? receipt.customFields![field] : content;
+    const isOverridden = !isCustom && receipt?.customFields && receipt.customFields[field];
+    const displayContent = isOverridden ? receipt.customFields![field] : (isCustom ? customItem.text : content);
 
     return (
       <div 
+        key={fieldId}
         className={`receipt-field cursor-move select-none group touch-none ${extraClass} ${
-          isDesigning && activeField === field ? 'ring-2 ring-primary-500 z-50' : ''
+          isDesigning && activeField === fieldId ? 'ring-2 ring-primary-500 z-50' : ''
         } ${isDesigning ? 'hover:bg-primary-500/5 transition-colors' : ''} ${
           isEditingText ? 'cursor-pointer' : ''
         } ${isOverridden ? 'text-primary-700' : ''}`}
@@ -579,17 +721,27 @@ export const ReceiptPreview: React.FC = () => {
           fontSize: `${fontSize}px`
         }}
         dir={isRtl ? 'rtl' : 'ltr'}
-        onMouseDown={(e) => handleDragStart(e, field)}
-        onTouchStart={(e) => handleTouchStart(e, field)}
+        onMouseDown={(e) => handleDragStart(e, fieldId)}
+        onTouchStart={(e) => handleTouchStart(e, fieldId)}
       >
         <div
           className={`absolute inset-0 z-20 group transition-all duration-300 ${isEditingText ? 'cursor-pointer' : ''}`}
-          onClick={() => handleFieldEdit(field as keyof ReceiptLayout, content)}
+          onClick={() => isCustom ? handleCustomItemEdit(customItem) : handleFieldEdit(field, content)}
         />
         {displayContent}
         {isDesigning && (
-          <div className="absolute -top-6 left-0 text-[10px] font-bold bg-primary-600 text-white px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 pointer-events-none uppercase tracking-tighter">
-            {pos.x}mm , {pos.y}mm
+          <div className="absolute -top-6 left-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="text-[10px] font-bold bg-primary-600 text-white px-1.5 py-0.5 rounded uppercase tracking-tighter shadow-sm whitespace-nowrap">
+              {pos.x}mm , {pos.y}mm
+            </div>
+            {isCustom && (
+              <button 
+                onClick={(e) => { e.stopPropagation(); handleRemoveCustomText(customItem.id); }}
+                className="w-5 h-5 bg-red-600 text-white rounded flex items-center justify-center hover:bg-red-700 pointer-events-auto shadow-sm"
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -671,7 +823,7 @@ export const ReceiptPreview: React.FC = () => {
       >
         {isDesigning ? (
           <div className={`flex flex-wrap items-center justify-center gap-1.5 sm:gap-3 bg-white/95 backdrop-blur p-2 rounded-2xl border border-neutral-200 shadow-xl max-w-full ${isRTL ? 'flex-row-reverse' : ''}`}>
-            {/* Reset Button Cluster */}
+            {/* Reset & Add Button Cluster */}
             <div className="flex items-center gap-1.5">
               <Button 
                   onClick={handleResetLayout} 
@@ -680,6 +832,16 @@ export const ReceiptPreview: React.FC = () => {
                   title={t.receipt.resetLayout}
               >
                 <RotateCcw style={{ color: '#dc2626' }} className="w-5 h-5 shrink-0 block group-hover:scale-110 transition-transform" strokeWidth={2.5} />
+              </Button>
+              <div className="h-6 w-px bg-neutral-200" />
+              
+              <Button 
+                  onClick={handleAddCustomText} 
+                  variant="secondary" 
+                  className="h-10 w-10 p-0 hover:bg-primary-50 hover:border-primary-100 transition-colors group"
+                  title="Add Custom Text"
+              >
+                <Plus style={{ color: '#0284c7' }} className="w-5 h-5 shrink-0 block group-hover:scale-110 transition-transform" strokeWidth={2.5} />
               </Button>
               <div className="h-6 w-px bg-neutral-200" />
               
@@ -755,7 +917,7 @@ export const ReceiptPreview: React.FC = () => {
               <>
                 <Button 
                   onClick={() => { 
-                    setTempLayout(currentLayout); 
+                    setTempLayout(displayLayout); 
                     setIsDesigning(true); 
                     setIsEditingText(false);
                   }} 
@@ -830,8 +992,26 @@ export const ReceiptPreview: React.FC = () => {
                   type="range" 
                   min="8" 
                   max="48" 
-                  value={(displayLayout[activeField as keyof ReceiptLayout] as LayoutPosition).fontSize || 14}
-                  onChange={(e) => adjustSize('current', 'font', parseInt(e.target.value) - ((displayLayout[activeField as keyof ReceiptLayout] as LayoutPosition).fontSize || 14))}
+                  value={(() => {
+                    if (activeField.startsWith('custom_')) {
+                      const id = activeField.replace('custom_', '');
+                      return (isDesigning ? tempLayout : displayLayout)?.customItems?.find(i => i.id === id)?.fontSize || 14;
+                    }
+                    const fieldLayout = (isDesigning ? tempLayout : displayLayout)?.[activeField as keyof ReceiptLayout] as LayoutPosition;
+                    return fieldLayout?.fontSize || 14;
+                  })()}
+                  onChange={(e) => {
+                    const newSize = parseInt(e.target.value);
+                    const currentSize = (() => {
+                      if (activeField.startsWith('custom_')) {
+                        const id = activeField.replace('custom_', '');
+                        return (isDesigning ? tempLayout : displayLayout)?.customItems?.find(i => i.id === id)?.fontSize || 14;
+                      }
+                      const fieldLayout = (isDesigning ? tempLayout : displayLayout)?.[activeField as keyof ReceiptLayout] as LayoutPosition;
+                      return fieldLayout?.fontSize || 14;
+                    })();
+                    adjustSize('current', 'font', newSize - currentSize);
+                  }}
                   className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary-500"
                 />
               </div>
@@ -885,7 +1065,7 @@ export const ReceiptPreview: React.FC = () => {
 
             {renderField('tenantName', tenant.nameAr || tenant.name, '', true)}
             {renderField('propertyAddress', property.addressAr || property.address, '', true)}
-            {renderField('amountNumbers', payment.paidAmount ?? payment.amount)}
+            {renderField('amountNumbers', baseRent)}
             {renderField('totalAmountNumbers', totalAmountValue)}
             {renderField('amountLetters', totalAmountValue > 0 ? numberToArabicWords(totalAmountValue) : '', '', true)}
             {renderField('monthYear', arabicMonthYear, '', true)}
@@ -908,6 +1088,11 @@ export const ReceiptPreview: React.FC = () => {
               return mapping[type] || type;
             })(), '', true)}
             {renderField('tenantReceiptNumber', formatSequence(paymentList[0]?.receiptSequence || ((tenant?.lastReceiptSequence || 0) + 1)))}
+
+            {/* Render Custom Layout Items */}
+            {(isDesigning ? tempLayout : displayLayout)?.customItems?.map(item => (
+              renderField('', item.text, '', false, item)
+            ))}
           </div>
         </div>
         

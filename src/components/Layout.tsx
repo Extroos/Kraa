@@ -13,7 +13,7 @@ import { useTranslation } from '../i18n';
 
 export const Layout: React.FC = () => {
   const { t } = useTranslation();
-  const { user, logout, role, accessAccounts, switchActiveAccount, effectiveOwnerId, ownerEmail, restrictedTenantName, restrictedTenantId } = useAuth();
+  const { user, logout, role, accessAccounts, switchActiveAccount, effectiveOwnerId, ownerEmail, restrictedTenantName, restrictedTenantId, unseenInvitations } = useAuth();
   const { tenants, properties } = useAppContext();
   const { isOnline, wasOffline } = useNetworkStatus();
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -193,9 +193,9 @@ export const Layout: React.FC = () => {
           
           <div className="flex items-center gap-2 sm:gap-4 shrink-0">
             {/* Pending Invitation Notification */}
-            {!isGuestMode && useAuth().unseenInvitations.length > 0 && (
+            {!isGuestMode && unseenInvitations.length > 0 && (
               <button 
-                onClick={() => switchActiveAccount(useAuth().unseenInvitations[0].ownerId)}
+                onClick={() => switchActiveAccount(unseenInvitations[0].ownerId)}
                 className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 transition-all shadow-sm animate-pulse"
               >
                 <ShieldCheck size={14} />
