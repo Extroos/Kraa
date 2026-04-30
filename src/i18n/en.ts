@@ -110,6 +110,8 @@ export const en = {
     confirmDeleteFolder: 'Are you sure you want to delete this collection? Properties will not be deleted.',
     addAssets: 'Select Properties',
     inOtherFolder: 'In another collection',
+    removeTenant: 'Remove Tenant',
+    removeTenantConfirm: 'Are you sure you want to remove "{tenant}" from "{property}"? The tenant will be moved to the archive and can be restored later.',
   },
 
   // Tenants
@@ -181,6 +183,9 @@ export const en = {
     operationalNotesLabel: 'Operational Notes',
     operationalNotesPlaceholder: 'Contact preferences, special terms, etc.',
     totalPerCycle: 'Total Per Cycle',
+    paymentSchedule: 'Payment Schedule',
+    firstOfMonth: 'First of the Month',
+    endOfMonth: 'End of the Month',
   },
 
   // Tenant Profile
@@ -276,6 +281,7 @@ export const en = {
     allCategories: 'ALL CATEGORIES',
     noMatching: 'No matching expense records',
     deleteRecord: 'Delete this record?',
+    deleteConfirm: 'Are you sure you want to delete this record?',
     totalExpenditure: 'Total Expenditure',
     recordsTracked: 'Records tracked',
     categoryBreakdown: 'Category Breakdown',
@@ -287,6 +293,7 @@ export const en = {
     title: 'Archived Tenants',
     subtitle: 'Historical Records & Inactive Leases',
     restore: 'Restore',
+    restoreConfirmation: 'Are you sure you want to restore this tenant back to the active list?',
     deleteForever: 'Delete Forever',
     noArchived: 'No archived tenants',
     archivedOn: 'Archived on',
@@ -372,6 +379,8 @@ export const en = {
     syncing: 'Syncing...',
     lastSynced: 'Last synced at',
     language: 'Language',
+    systemLive: 'System Live & Synchronized',
+    manualOverwrite: 'Manual Overwrite Synchronization',
   },
 
   // Payments
@@ -446,6 +455,19 @@ export const en = {
     templateUnlocked: 'Template Unlocked',
     resetLayout: 'Restore to default Arabic layout? All current customizations will be lost.',
     page: 'PAGE',
+    paymentEvidence: 'PAYMENT EVIDENCE RECORD',
+    customText: 'Custom Text',
+    stopEditing: 'Stop Editing',
+    editText: 'Edit Text',
+    selectField: 'Select Field',
+    small: 'Small',
+    precisionSizeSlider: 'Precision Size Slider',
+    large: 'Large',
+    manualOverride: 'Manual Override',
+    enterCustomText: 'Enter custom text...',
+    saveChanges: 'Save Changes',
+    editAppliesNote: 'This edit only applies to this specific document rendering.',
+    officialAuditRecord: 'Official Audit Record',
     uploadTemplate: 'Upload Physical Template Scan',
     lockBackground: 'Lock Background',
     unlockBackground: 'Unlock Background to Reposition',

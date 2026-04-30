@@ -12,13 +12,15 @@ import { Card, Button } from '../components/ui';
 import { format, parseISO } from 'date-fns';
 import { APP_CONFIG } from '../config/constants';
 import { useTranslation } from '../i18n';
+import { useAuth } from '../store/AuthContext';
 
 export const TenantPortal: React.FC = () => {
   const { tenants, properties, payments, generateReceipt } = useAppContext();
+  const { restrictedTenantId } = useAuth();
   const { t, isRTL } = useTranslation();
   
-  const tenant = tenants[0];
-  const property = properties[0];
+  const tenant = restrictedTenantId ? tenants.find(t => t.id === restrictedTenantId) : tenants[0];
+  const property = tenant ? properties.find(p => p.id === tenant.propertyId) : properties[0];
 
   if (!tenant || !property) {
     return (

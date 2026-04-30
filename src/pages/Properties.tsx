@@ -5,6 +5,7 @@ import {
   MapPin, 
   Users, 
   UserPlus, 
+  UserMinus,
   Receipt, 
   History as HistoryIcon, 
   Plus, 
@@ -62,6 +63,7 @@ export const Properties: React.FC = () => {
     addProperty, 
     updateProperty, 
     deleteProperty, 
+    updateTenant,
     addFolder,
     updateFolder,
     deleteFolder,
@@ -87,6 +89,9 @@ export const Properties: React.FC = () => {
 
   const [folderDeleteModalOpen, setFolderDeleteModalOpen] = useState(false);
   const [folderToDelete, setFolderToDelete] = useState<PropertyFolder | null>(null);
+
+  const [archiveTenantModalOpen, setArchiveTenantModalOpen] = useState(false);
+  const [tenantToArchive, setTenantToArchive] = useState<{ id: string; name: string; propertyName: string } | null>(null);
 
   // Filter state
   const [selectedFolderId, setSelectedFolderId] = useState<string | 'all'>('all');
@@ -157,6 +162,22 @@ export const Properties: React.FC = () => {
       await deleteFolder(folderToDelete.id);
       if (selectedFolderId === folderToDelete.id) setSelectedFolderId('all');
       setFolderDeleteModalOpen(false);
+    }
+  };
+
+  const handleArchiveTenantClick = (tenantId: string, tenantName: string, propertyName: string) => {
+    setTenantToArchive({ id: tenantId, name: tenantName, propertyName });
+    setArchiveTenantModalOpen(true);
+  };
+
+  const confirmArchiveTenant = async () => {
+    if (tenantToArchive) {
+      await updateTenant(tenantToArchive.id, {
+        tenantStatus: 'archived',
+        archiveDate: new Date().toISOString()
+      });
+      setArchiveTenantModalOpen(false);
+      setTenantToArchive(null);
     }
   };
 
@@ -458,6 +479,15 @@ export const Properties: React.FC = () => {
                           <span className="uppercase text-[7px] sm:text-[10px] font-black tracking-widest">{t.nav.tenants}</span>
                         </Button>
                       )}
+                      {!isReadOnly && activeTenant && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleArchiveTenantClick(activeTenant.id, activeTenant.name, property.name); }}
+                          className="w-7 h-7 sm:w-10 sm:h-10 bg-white border border-neutral-100 rounded-lg sm:rounded-xl flex items-center justify-center text-neutral-400 hover:text-warning-600 hover:border-warning-400 hover:bg-warning-50 transition-all shadow-sm shrink-0"
+                          title={t.properties.removeTenant}
+                        >
+                          <UserMinus size={12} className="sm:w-4.5 sm:h-4.5" />
+                        </button>
+                      )}
                       {archivedCount > 0 && (
                         <Link 
                           to={`/archived-tenants?propertyId=${property.id}`}
@@ -527,6 +557,20 @@ export const Properties: React.FC = () => {
           message={t.properties.confirmDeleteFolder}
           confirmText={t.common.delete}
           isDestructive={true}
+        />
+      )}
+
+      {archiveTenantModalOpen && tenantToArchive && (
+        <ConfirmModal
+          isOpen={archiveTenantModalOpen}
+          onCancel={() => { setArchiveTenantModalOpen(false); setTenantToArchive(null); }}
+          onConfirm={confirmArchiveTenant}
+          title={t.properties.removeTenant}
+          message={t.properties.removeTenantConfirm
+            .replace('{tenant}', tenantToArchive.name)
+            .replace('{property}', tenantToArchive.propertyName)}
+          confirmText={t.properties.removeTenant}
+          isDestructive={false}
         />
       )}
     </div>

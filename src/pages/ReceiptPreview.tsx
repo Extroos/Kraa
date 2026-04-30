@@ -6,6 +6,7 @@ import { useAppContext } from '../hooks/useAppContext';
 import { format, parseISO, isValid, addMonths } from 'date-fns';
 import { Receipt, Payment, ReceiptLayout, LayoutPosition, CustomLayoutItem } from '../types';
 import { Button } from '../components/ui';
+import { ConfirmModal } from '../components/ConfirmModal';
 import { DEFAULT_RECEIPT_LAYOUT } from '../store/AppProvider';
 import { numberToArabicWords } from '../utils/arabic';
 import { useTranslation } from '../i18n';
@@ -71,6 +72,7 @@ export const ReceiptPreview: React.FC = () => {
   const [isDesigning, setIsDesigning] = useState(false);
   const [tempLayout, setTempLayout] = useState<ReceiptLayout | null>(null);
   const [isImageLocked, setIsImageLocked] = useState(true);
+  const [resetModalOpen, setResetModalOpen] = useState(false);
   const [activeField, setActiveField] = useState<string | null>(null);
   const [dragStart, setDragStart] = useState<{ x: number, y: number } | null>(null);
   const currentLayout = useMemo(() => {
@@ -353,18 +355,21 @@ export const ReceiptPreview: React.FC = () => {
   };
 
   const handleResetLayout = async () => {
-    if (window.confirm(t.receipt.resetLayout)) {
-      const resetLayout = { ...DEFAULT_RECEIPT_LAYOUT } as unknown as ReceiptLayout;
-      
-      // Resolve local image if necessary
-      if (resetLayout.bgImage === 'local:custom_template' && effectiveOwnerId) {
-        const localBase64 = await getLocalReceiptTemplate(effectiveOwnerId);
-        if (localBase64) resetLayout.bgImage = localBase64;
-      }
-      
-      setTempLayout(resetLayout);
-      setBgFile(null);
+    setResetModalOpen(true);
+  };
+
+  const confirmResetLayout = async () => {
+    const resetLayout = { ...DEFAULT_RECEIPT_LAYOUT } as unknown as ReceiptLayout;
+    
+    // Resolve local image if necessary
+    if (resetLayout.bgImage === 'local:custom_template' && effectiveOwnerId) {
+      const localBase64 = await getLocalReceiptTemplate(effectiveOwnerId);
+      if (localBase64) resetLayout.bgImage = localBase64;
     }
+    
+    setTempLayout(resetLayout);
+    setBgFile(null);
+    setResetModalOpen(false);
   };
 
   const handleBackgroundClick = (e: React.MouseEvent) => {
@@ -380,7 +385,7 @@ export const ReceiptPreview: React.FC = () => {
     const newId = uuidv4().substring(0, 8);
     const newItem: CustomLayoutItem = {
       id: newId,
-      text: 'Custom Text',
+      text: t.receipt.customText,
       x: 10,
       y: 10,
       fontSize: 14
@@ -937,7 +942,7 @@ export const ReceiptPreview: React.FC = () => {
                   }`}
                 >
                   <Save className={`w-4 h-4 sm:w-5 sm:h-5 ${isRTL ? 'ml-1 sm:ml-2' : 'mr-1 sm:mr-2'}`} />
-                  {isEditingText ? 'Stop Editing' : 'Edit Text'}
+                  {isEditingText ? t.receipt.stopEditing || 'Stop Editing' : t.receipt.editText || 'Edit Text'}
                 </Button>
               </>
             )}
@@ -972,7 +977,7 @@ export const ReceiptPreview: React.FC = () => {
                <div className={`flex items-center gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
                   <Move className="w-4 h-4 text-primary-400" />
                   <p className="text-[10px] font-black uppercase tracking-widest leading-none">
-                    {activeField ? t.receipt[activeField as keyof typeof t.receipt] || activeField.toString() : 'Select Field'}
+                    {activeField ? t.receipt[activeField as keyof typeof t.receipt] || activeField.toString() : t.receipt.selectField || 'Select Field'}
                   </p>
                </div>
                <div className="flex gap-1">
@@ -984,9 +989,9 @@ export const ReceiptPreview: React.FC = () => {
             {activeField && activeField !== 'backgroundImage' && (
               <div className="flex flex-col gap-2">
                 <div className="flex justify-between text-[8px] font-black uppercase tracking-tighter text-neutral-400">
-                   <span>Small</span>
-                   <span>Precision Size Slider</span>
-                   <span>Large</span>
+                   <span>{t.receipt.small || 'Small'}</span>
+                   <span>{t.receipt.precisionSizeSlider || 'Precision Size Slider'}</span>
+                   <span>{t.receipt.large || 'Large'}</span>
                 </div>
                 <input 
                   type="range" 
@@ -1027,7 +1032,7 @@ export const ReceiptPreview: React.FC = () => {
         <div className={`w-full max-w-full moving-viewport ${isDesigning ? 'designer-active-viewport' : ''}`}>
           
           <div 
-            className="print-container flex-shrink-0 transition-all duration-300 ease-out origin-top" 
+            className="print-container shrink-0 transition-all duration-300 ease-out origin-top" 
             dir="ltr" 
             id="receipt-doc"
             ref={containerRef}
@@ -1110,7 +1115,7 @@ export const ReceiptPreview: React.FC = () => {
         <div className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-neutral-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-white/20">
             <div className="bg-neutral-900 text-white px-6 py-4 flex items-center justify-between">
-              <h3 className="font-black uppercase tracking-widest text-xs">Manual Override</h3>
+              <h3 className="font-black uppercase tracking-widest text-xs">{t.receipt.manualOverride || 'Manual Override'}</h3>
               <button onClick={() => setEditingField(null)} className="opacity-50 hover:opacity-100 transition-opacity">
                 <CloseIcon className="w-5 h-5" />
               </button>
@@ -1125,7 +1130,7 @@ export const ReceiptPreview: React.FC = () => {
                   value={editValue}
                   onChange={(e) => setEditValue(e.target.value)}
                   className="w-full bg-neutral-50 border-2 border-neutral-100 rounded-2xl px-5 py-4 font-bold text-neutral-900 focus:border-primary-500 focus:bg-white outline-none transition-all transition-duration-300 min-h-[120px] resize-none"
-                  placeholder="Enter custom text..."
+                  placeholder={t.receipt.enterCustomText || "Enter custom text..."}
                   autoFocus
                 />
               </div>
@@ -1135,14 +1140,14 @@ export const ReceiptPreview: React.FC = () => {
                   {t.common.cancel}
                 </Button>
                 <Button onClick={saveCustomField} className="flex-2 h-12 bg-primary-600 hover:bg-primary-700 text-white uppercase tracking-widest font-black text-[10px] rounded-2xl shadow-lg shadow-primary-500/20 active:translate-y-0.5 transition-all">
-                  Save Changes
+                  {t.receipt.saveChanges || 'Save Changes'}
                 </Button>
               </div>
               
               <div className="flex items-center gap-2 bg-neutral-50 p-3 rounded-xl border border-neutral-100">
                 <AlertCircle className="w-4 h-4 text-neutral-400 shrink-0" />
                 <p className="text-[9px] text-neutral-500 font-bold leading-tight">
-                  This edit only applies to this specific receipt. Global data remains unchanged.
+                  {t.receipt.editAppliesNote || 'This edit only applies to this specific receipt. Global data remains unchanged.'}
                 </p>
               </div>
             </div>
@@ -1162,12 +1167,21 @@ export const ReceiptPreview: React.FC = () => {
                  {t.receipt.paidStatus}
                </span>
                <span className="text-neutral-400 text-[9px] font-bold uppercase tracking-widest leading-none mt-1">
-                 Official Audit Record
+                 {t.receipt.officialAuditRecord || 'Official Audit Record'}
                </span>
              </div>
           </div>
         </div>
       )}
+      <ConfirmModal
+        isOpen={resetModalOpen}
+        onCancel={() => setResetModalOpen(false)}
+        onConfirm={confirmResetLayout}
+        title={t.receipt.resetLayout || 'Reset Layout'}
+        message={t.receipt.resetLayout || 'Restore to default layout? All current customizations will be lost.'}
+        confirmText={t.common?.confirm || 'Confirm'}
+        cancelText={t.common?.cancel || 'Cancel'}
+      />
     </div>
   );
 };

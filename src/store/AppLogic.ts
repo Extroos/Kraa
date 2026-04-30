@@ -47,6 +47,7 @@ export interface AppContextType extends AppState {
   bulkUnmarkAsPaid: (paymentIds: string[]) => Promise<void>;
   getLatestUnpaidPayments: (tenantId: string, count: number) => Promise<Payment[]>;
   addExpense: (expense: Omit<Expense, 'id' | 'createdAt' | 'ownerId'>) => Promise<void>;
+  updateExpense: (id: string, expense: Partial<Expense>) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
   getPropertyFinancials: (propertyId: string) => { income: number; expenses: number; net: number };
   profitFocusMode: boolean;
@@ -90,7 +91,7 @@ export const formatReceiptNumber = (num?: number): string => {
 };
 
 export const generatePaymentsForYear = (tenant: Tenant, year: number, ownerId: string, existingPayments: Payment[] = []): Payment[] => {
-  if (!tenant.startDate) return [];
+  if (!tenant.startDate || tenant.tenantStatus === 'archived') return [];
   const start = parseISO(tenant.startDate);
   if (!isValid(start)) return [];
   

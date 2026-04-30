@@ -1293,6 +1293,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const updateExpense = async (id: string, expenseUpdate: Partial<Expense>) => {
+    if (!user || isReadOnly || !effectiveOwnerId) return;
+    try {
+      await runTransaction(db, async (transaction) => {
+        const expenseRef = doc(db, FIREBASE_COLLECTIONS.EXPENSES, id);
+        const expenseSnap = await transaction.get(expenseRef);
+        if (!expenseSnap.exists()) return;
+        
+        const oldExpense = expenseSnap.data() as Expense;
+        transaction.update(expenseRef, expenseUpdate);
+        
+        if (expenseUpdate.amount !== undefined && expenseUpdate.amount !== oldExpense.amount) {
+          const statsRef = doc(db, FIREBASE_COLLECTIONS.STATS, effectiveOwnerId);
+          const statsSnap = await transaction.get(statsRef);
+          if (statsSnap.exists()) {
+            const diff = expenseUpdate.amount - oldExpense.amount;
+            transaction.update(statsRef, {
+              totalExpenses: increment(diff),
+              lastUpdated: new Date().toISOString()
+            });
+          }
+        }
+      });
+      triggerDataSync();
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `${FIREBASE_COLLECTIONS.EXPENSES}/${id}`, user.uid, user.email);
+    }
+  };
+
   const deleteExpense = async (id: string) => {
     if (!user || isReadOnly || !effectiveOwnerId) return;
     try {
@@ -1720,11 +1749,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         id,
         name,
         ownerId: effectiveOwnerId,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        propertyIds: []
       };
       await setDoc(folderRef, folder);
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, FIREBASE_COLLECTIONS.FOLDERS);
+      handleFirestoreError(error, OperationType.WRITE, FIREBASE_COLLECTIONS.FOLDERS, user.uid, user.email);
     }
   };
 
@@ -1734,7 +1764,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const folderRef = doc(db, FIREBASE_COLLECTIONS.FOLDERS, id);
       await updateDoc(folderRef, { name });
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, FIREBASE_COLLECTIONS.FOLDERS);
+      handleFirestoreError(error, OperationType.UPDATE, FIREBASE_COLLECTIONS.FOLDERS, user.uid, user.email);
     }
   };
 
@@ -1755,7 +1785,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       
       await batch.commit();
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, FIREBASE_COLLECTIONS.FOLDERS);
+      handleFirestoreError(error, OperationType.DELETE, FIREBASE_COLLECTIONS.FOLDERS, user.uid, user.email);
     }
   };
 
@@ -1767,7 +1797,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         folderId: folderId === null ? deleteField() : folderId 
       });
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, FIREBASE_COLLECTIONS.PROPERTIES);
+      handleFirestoreError(error, OperationType.UPDATE, FIREBASE_COLLECTIONS.PROPERTIES, user.uid, user.email);
     }
   };
 
@@ -1787,7 +1817,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           id: finalFolderId,
           name,
           ownerId: effectiveOwnerId,
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
+          propertyIds: []
         };
         batch.set(folderRef, folder);
       } else {
@@ -1812,7 +1843,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       
       await batch.commit();
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, FIREBASE_COLLECTIONS.FOLDERS);
+      handleFirestoreError(error, OperationType.WRITE, FIREBASE_COLLECTIONS.FOLDERS, user.uid, user.email);
     }
   };
 
@@ -1855,6 +1886,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       triggerDataSync, 
       saveReceiptLayout, 
       addExpense, 
+      updateExpense,
       deleteExpense, 
       getPropertyFinancials, 
       profitFocusMode, 

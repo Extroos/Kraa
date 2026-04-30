@@ -109,6 +109,8 @@ export const ar: TranslationKeys = {
     allAssets: 'جميع العقارات',
     deleteFolder: 'حذف المجموعة',
     moveToFolder: 'نقل إلى مجموعة',
+    removeTenant: 'إخلاء المستأجر',
+    removeTenantConfirm: 'هل أنت متأكد من إخلاء "{tenant}" من "{property}"؟ سيتم نقل المستأجر إلى الأرشيف ويمكن استعادته لاحقاً.',
   },
 
   tenants: {
@@ -178,7 +180,10 @@ export const ar: TranslationKeys = {
     rentAmountArLabel: 'مبلغ الإيجار (بالعربي)',
     operationalNotesLabel: 'ملاحظات تشغيلية',
     operationalNotesPlaceholder: 'تفضيلات الاتصال، شروط خاصة، إلخ.',
-    totalPerCycle: 'المجموع لكل دورة',
+    totalPerCycle: 'الإجمالي لكل دورة',
+    paymentSchedule: 'جدول الدفع',
+    firstOfMonth: 'أول الشهر',
+    endOfMonth: 'آخر الشهر',
   },
 
   tenantProfile: {
@@ -272,6 +277,7 @@ export const ar: TranslationKeys = {
     allCategories: 'جميع الفئات',
     noMatching: 'لا توجد سجلات مصاريف مطابقة',
     deleteRecord: 'حذف هذا السجل؟',
+    deleteConfirm: 'هل أنت متأكد من أنك تريد حذف هذا السجل؟',
     totalExpenditure: 'إجمالي الإنفاق',
     recordsTracked: 'سجلات متتبعة',
     categoryBreakdown: 'تحليل الفئات',
@@ -282,6 +288,7 @@ export const ar: TranslationKeys = {
     title: 'المستأجرون المؤرشفون',
     subtitle: 'السجلات التاريخية والعقود غير النشطة',
     restore: 'استعادة',
+    restoreConfirmation: 'هل أنت متأكد أنك تريد استعادة هذا المستأجر إلى القائمة النشطة؟',
     deleteForever: 'حذف نهائي',
     noArchived: 'لا يوجد مستأجرون مؤرشفون',
     archivedOn: 'أُرشف في',
@@ -365,6 +372,8 @@ export const ar: TranslationKeys = {
     syncing: 'جاري المزامنة...',
     lastSynced: 'آخر مزامنة في',
     language: 'اللغة',
+    systemLive: 'النظام متصل ومزامن',
+    manualOverwrite: 'تزامن التعديل اليدوي',
   },
 
   payments: {
@@ -444,6 +453,20 @@ export const ar: TranslationKeys = {
     paymentPlacePlaceholder: 'آسفي',
     failedLoad: 'فشل تحميل بيانات الإيصال',
     sequence: 'السلسلة',
+    paidStatus: 'مدفوع / خلاص',
+    paymentEvidence: 'سجل إثبات الدفع',
+    customText: 'نص مخصص',
+    stopEditing: 'إيقاف التعديل',
+    editText: 'تعديل النص',
+    selectField: 'اختر حقلاً',
+    small: 'صغير',
+    precisionSizeSlider: 'شريط ضبط الحجم الدقيق',
+    large: 'كبير',
+    manualOverride: 'تعديل يدوي',
+    enterCustomText: 'أدخل نصاً مخصصاً...',
+    saveChanges: 'حفظ التغييرات',
+    editAppliesNote: 'هذا التعديل ينطبق فقط على هذا الإيصال المحدد.',
+    officialAuditRecord: 'سجل تدقيق رسمي',
   },
   // Tenant Portal
   tenantPortal: {

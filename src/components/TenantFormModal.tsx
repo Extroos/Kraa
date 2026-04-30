@@ -88,6 +88,10 @@ export const TenantFormModal: React.FC<TenantFormModalProps> = ({
     
     // Fallback manual validation just in case
     if (!formData.name || !formData.phone || !formData.propertyId || !formData.startDate) return;
+    if (Number(formData.rentAmount) <= 0) {
+      alert("Rent amount must be greater than 0");
+      return;
+    }
 
     onSave({
       ...formData,
@@ -166,7 +170,7 @@ export const TenantFormModal: React.FC<TenantFormModalProps> = ({
                 label={`${t.tenants.rentAmountLabel} (${APP_CONFIG.CURRENCY})`}
                 required
                 type="number"
-                min="0"
+                min="1"
                 value={formData.rentAmount === 0 ? '' : formData.rentAmount}
                 onChange={(e) => handleRentAmountChange(e.target.value)}
               />
@@ -209,15 +213,15 @@ export const TenantFormModal: React.FC<TenantFormModalProps> = ({
             onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
           />
           <div>
-            <label className="block text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1.5">Payment Schedule</label>
+            <label className="block text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1.5">{t.tenants.paymentSchedule || 'Payment Schedule'}</label>
             <select
               required
               value={formData.paymentDay}
               onChange={(e) => setFormData({ ...formData, paymentDay: e.target.value as any })}
               className="w-full h-10 px-3 bg-neutral-50 border border-neutral-200 rounded text-xs font-bold uppercase tracking-wider focus:border-primary-500 outline-none transition-colors cursor-pointer"
             >
-              <option value="first">First of the Month</option>
-              <option value="end">End of the Month</option>
+              <option value="first">{t.tenants.firstOfMonth || 'First of the Month'}</option>
+              <option value="end">{t.tenants.endOfMonth || 'End of the Month'}</option>
             </select>
           </div>
         </div>

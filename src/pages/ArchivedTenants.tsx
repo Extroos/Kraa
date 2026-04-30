@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import { useAppContext } from '../hooks/useAppContext';
-import { Search, Filter, Calendar, MapPin, History, Trash2, AlertCircle, X } from 'lucide-react';
+import { Search, Filter, Calendar, MapPin, History, Trash2, AlertCircle, X, RotateCcw } from 'lucide-react';
 import { format, parseISO, isValid } from 'date-fns';
 import { Card, Button, Input } from '../components/ui';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -11,7 +11,7 @@ import { useTranslation } from '../i18n';
 export const ArchivedTenants: React.FC = () => {
   const navigate = useNavigate();
   const { isReadOnly } = useAuth();
-  const { getTenantsWithStatus, properties, updateLandlordActivity, deleteTenant } = useAppContext();
+  const { getTenantsWithStatus, properties, updateLandlordActivity, deleteTenant, updateTenant } = useAppContext();
   const { t, isRTL } = useTranslation();
 
   useEffect(() => {
@@ -20,6 +20,9 @@ export const ArchivedTenants: React.FC = () => {
 
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [tenantToDelete, setTenantToDelete] = useState<string | null>(null);
+  
+  const [restoreModalOpen, setRestoreModalOpen] = useState(false);
+  const [tenantToRestore, setTenantToRestore] = useState<string | null>(null);
 
   const handleDeleteClick = (tenantId: string) => {
     setTenantToDelete(tenantId);
@@ -32,6 +35,19 @@ export const ArchivedTenants: React.FC = () => {
     }
     setDeleteModalOpen(false);
     setTenantToDelete(null);
+  };
+
+  const handleRestoreClick = (tenantId: string) => {
+    setTenantToRestore(tenantId);
+    setRestoreModalOpen(true);
+  };
+
+  const confirmRestore = async () => {
+    if (tenantToRestore) {
+      updateTenant(tenantToRestore, { tenantStatus: 'active', archiveDate: undefined });
+    }
+    setRestoreModalOpen(false);
+    setTenantToRestore(null);
   };
 
   const allTenants = getTenantsWithStatus(true);
@@ -163,6 +179,17 @@ export const ArchivedTenants: React.FC = () => {
                           <Button
                             variant="secondary"
                             size="sm"
+                            onClick={() => handleRestoreClick(tenant.id)}
+                            className="w-10 h-10 p-0 border-neutral-200 text-emerald-500 hover:text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50 shadow-sm"
+                            title={t.archive.restore || 'Restore'}
+                          >
+                            <RotateCcw size={20} />
+                          </Button>
+                        )}
+                        {!isReadOnly && (
+                          <Button
+                            variant="secondary"
+                            size="sm"
                             onClick={() => handleDeleteClick(tenant.id)}
                             className="w-10 h-10 p-0 border-neutral-200 text-danger-400 hover:text-danger-600 hover:border-danger-300 hover:bg-danger-50 shadow-sm"
                             title={t.archive.deleteTenant}
@@ -196,12 +223,21 @@ export const ArchivedTenants: React.FC = () => {
               onClick={() => navigate(`/tenants/${tenant.id}`)}
             >
               {!isReadOnly && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleDeleteClick(tenant.id); }}
-                  className="absolute top-1.5 right-1.5 z-10 w-5 h-5 flex items-center justify-center text-neutral-300 hover:text-danger-500 transition-colors rounded-full hover:bg-danger-50 rtl:right-auto rtl:left-1.5"
-                >
-                  <X size={14} strokeWidth={3} />
-                </button>
+                <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-1 rtl:right-auto rtl:left-1.5">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleRestoreClick(tenant.id); }}
+                    className="w-6 h-6 flex items-center justify-center text-emerald-400 hover:text-emerald-600 transition-colors rounded-full hover:bg-emerald-50"
+                    title={t.archive.restore || 'Restore'}
+                  >
+                    <RotateCcw size={14} strokeWidth={2.5} />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDeleteClick(tenant.id); }}
+                    className="w-6 h-6 flex items-center justify-center text-neutral-300 hover:text-danger-500 transition-colors rounded-full hover:bg-danger-50"
+                  >
+                    <X size={14} strokeWidth={3} />
+                  </button>
+                </div>
               )}
 
               <div className="p-3 flex-1 flex flex-col">
@@ -236,6 +272,16 @@ export const ArchivedTenants: React.FC = () => {
         title={t.archive.permanentDeletion}
         message={t.archive.deleteConfirmation}
         confirmText={t.archive.confirmDeletion}
+        cancelText={t.common.cancel}
+      />
+
+      <ConfirmModal
+        isOpen={restoreModalOpen}
+        onCancel={() => { setRestoreModalOpen(false); setTenantToRestore(null); }}
+        onConfirm={confirmRestore}
+        title={t.archive.restore || 'Restore Tenant'}
+        message={t.archive.restoreConfirmation || 'Are you sure you want to restore this tenant back to the active list?'}
+        confirmText={t.archive.restore || 'Restore'}
         cancelText={t.common.cancel}
       />
     </div>

@@ -2,17 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../hooks/useAppContext';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
-import { Plus, Search, Filter, Trash2, Calendar, Wrench, Receipt, Building2, Eye, EyeOff } from 'lucide-react';
+import { Plus, Search, Filter, Trash2, Edit2, Calendar, Wrench, Receipt, Building2, Eye, EyeOff } from 'lucide-react';
 import { Expense, ExpenseCategory } from '../types';
 import { format, parseISO } from 'date-fns';
 import { ExpenseFormModal } from '../components/ExpenseFormModal';
+import { ConfirmModal } from '../components/ConfirmModal';
 import { Button, Input, Card } from '../components/ui';
 import { APP_CONFIG } from '../config/constants';
 import { useTranslation } from '../i18n';
 
 export const Expenses: React.FC = () => {
   const { isReadOnly } = useAuth();
-  const { expenses, properties, addExpense, deleteExpense, profitFocusMode, toggleProfitFocusMode, updateLandlordActivity } = useAppContext();
+  const { expenses, properties, addExpense, updateExpense, deleteExpense, profitFocusMode, toggleProfitFocusMode, updateLandlordActivity } = useAppContext();
   const { t, isRTL } = useTranslation();
 
   useEffect(() => {
@@ -25,6 +26,22 @@ export const Expenses: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [prefilledPropertyId, setPrefilledPropertyId] = useState<string>('');
+
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [expenseToDelete, setExpenseToDelete] = useState<string | null>(null);
+
+  const handleDeleteClick = (expenseId: string) => {
+    setExpenseToDelete(expenseId);
+    setDeleteModalOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (expenseToDelete) {
+      await deleteExpense(expenseToDelete);
+    }
+    setDeleteModalOpen(false);
+    setExpenseToDelete(null);
+  };
 
   useEffect(() => {
     const state = location.state as { prefillPropertyId?: string; openAddModal?: boolean };
@@ -45,12 +62,13 @@ export const Expenses: React.FC = () => {
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const handleSaveExpense = async (data: any) => {
-    try {
+    if (editingExpense) {
+      await updateExpense(editingExpense.id, data);
+    } else {
       await addExpense(data);
-      setIsModalOpen(false);
-    } catch (err) {
-      console.error("Failed to save expense:", err);
     }
+    setIsModalOpen(false);
+    setEditingExpense(null);
   };
 
   const totalAmount = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
@@ -94,8 +112,9 @@ export const Expenses: React.FC = () => {
             {profitFocusMode ? <EyeOff size={20} className="shrink-0" /> : <Eye size={20} className="shrink-0" />}
           </Button>
           {!isReadOnly && (
-            <Button onClick={() => { setEditingExpense(null); setIsModalOpen(true); }} size="sm">
-              <Plus size={20} className={`shrink-0 ${isRTL ? 'ml-1' : 'mr-1'}`} /> {t.expenses.addRecord}
+            <Button onClick={() => { setEditingExpense(null); setIsModalOpen(true); }} className="h-10 px-5 bg-primary-600 hover:bg-primary-700 text-white font-bold text-xs uppercase tracking-widest rounded shadow-sm hover:shadow active:translate-y-0 transition-all shrink-0">
+                <Plus size={18} className={`shrink-0 ${isRTL ? 'ml-2' : 'mr-2'}`} strokeWidth={2.5} />
+                <span className="hidden sm:inline">{t.expenses.addExpense}</span>
             </Button>
           )}
         </div>
@@ -175,14 +194,22 @@ export const Expenses: React.FC = () => {
                       </td>
                       <td className={`px-4 py-4 whitespace-nowrap ${isRTL ? 'text-left' : 'text-right'}`}>
                         {!isReadOnly && (
-                          <button
-                            onClick={() => {
-                              if (window.confirm(t.expenses.deleteRecord)) deleteExpense(expense.id);
-                            }}
-                            className="p-2 text-neutral-400 hover:text-danger-600 hover:bg-danger-50 rounded transition-colors"
-                          >
-                            <Trash2 size={20} className="shrink-0" />
-                          </button>
+                          <div className={`flex items-center gap-1 ${isRTL ? 'justify-start' : 'justify-end'}`}>
+                            <button
+                              onClick={() => { setEditingExpense(expense); setIsModalOpen(true); }}
+                              className="p-2 text-neutral-400 hover:text-primary-600 hover:bg-primary-50 rounded transition-colors"
+                              title={t.common.edit}
+                            >
+                              <Edit2 size={20} className="shrink-0" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteClick(expense.id)}
+                              className="p-2 text-neutral-400 hover:text-danger-600 hover:bg-danger-50 rounded transition-colors"
+                              title={t.common.delete}
+                            >
+                              <Trash2 size={20} className="shrink-0" />
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -228,15 +255,22 @@ export const Expenses: React.FC = () => {
                        </div>
                        
                        {!isReadOnly && (
+                        <div className={`flex items-center gap-2 border-t border-neutral-100 p-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
                           <button
-                            onClick={() => {
-                              if (window.confirm(t.expenses.deleteRecord)) deleteExpense(expense.id);
-                            }}
-                            className="w-7 h-7 flex items-center justify-center text-neutral-400 hover:text-danger-500 transition-colors"
+                            onClick={() => { setEditingExpense(expense); setIsModalOpen(true); }}
+                            className="flex-1 py-2 text-center text-[10px] font-bold text-primary-600 uppercase tracking-widest hover:bg-primary-50 rounded transition-colors flex justify-center items-center gap-1.5"
                           >
-                            <Trash2 size={16} className="shrink-0" />
+                            <Edit2 size={14} className="shrink-0" /> {t.common.edit}
                           </button>
-                       )}
+                          <div className="w-px h-4 bg-neutral-200"></div>
+                          <button
+                            onClick={() => handleDeleteClick(expense.id)}
+                            className="flex-1 py-2 text-center text-[10px] font-bold text-danger-600 uppercase tracking-widest hover:bg-danger-50 rounded transition-colors flex justify-center items-center gap-1.5"
+                          >
+                            <Trash2 size={14} className="shrink-0" /> {t.common.delete}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))
@@ -285,6 +319,16 @@ export const Expenses: React.FC = () => {
         onSave={handleSaveExpense}
         properties={properties}
         editingExpense={editingExpense}
+      />
+
+      <ConfirmModal
+        isOpen={deleteModalOpen}
+        onCancel={() => { setDeleteModalOpen(false); setExpenseToDelete(null); }}
+        onConfirm={confirmDelete}
+        title={t.expenses.deleteRecord || 'Delete Record'}
+        message={t.expenses.deleteConfirm || 'Are you sure you want to delete this record?'}
+        confirmText={t.common?.confirm || 'Confirm'}
+        cancelText={t.common?.cancel || 'Cancel'}
       />
     </div>
   );

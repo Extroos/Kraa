@@ -6,6 +6,7 @@ import { getPaymentStatus } from '../store/AppLogic';
 import { ArrowLeft, CheckCircle2, Clock, AlertCircle, Archive, Printer, RotateCcw, X, Layers, Split, Scissors, Plus, DollarSign, FileText, Calendar } from 'lucide-react';
 import { format, parseISO, isBefore, startOfDay, isValid, differenceInMonths, addMonths, subDays, differenceInDays } from 'date-fns';
 import { RecordPaymentModal } from '../components/RecordPaymentModal';
+import { ConfirmModal } from '../components/ConfirmModal';
 import { PaymentMethod, Payment } from '../types';
 import { Button, Card, CardHeader } from '../components/ui';
 import { APP_CONFIG } from '../config/constants';
@@ -36,15 +37,15 @@ export const TenantProfile: React.FC = () => {
     groupPayments,
     loadArchivalYear,
     clearArchivalCache,
-    syncCounter
+    syncCounter,
+    payments: globalPayments,
+    getTenantsWithStatus
   } = useAppContext();
 
   const [loading, setLoading] = useState(false);
-  const { payments: globalPayments } = useAppContext();
   
   const tenant = tenants.find(t => t.id === id);
   const property = properties.find(p => p.id === tenant?.propertyId);
-  const { getTenantsWithStatus } = useAppContext();
   const tenantWithStatus = getTenantsWithStatus(true).find(t => t.id === id);
 
   useEffect(() => {
@@ -63,6 +64,21 @@ export const TenantProfile: React.FC = () => {
 
   const [viewingChequeId, setViewingChequeId] = useState<string | null>(null);
   const [chequeImageBase64, setChequeImageBase64] = useState<string | null>(null);
+
+  const [confirmAction, setConfirmAction] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText?: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
+
+  const closeConfirm = () => setConfirmAction(prev => ({ ...prev, isOpen: false }));
 
   // Filter payments from global state for real-time updates
   const tenantPayments = useMemo(() => {
@@ -270,9 +286,30 @@ export const TenantProfile: React.FC = () => {
     .reduce((sum, p) => sum + p.amount, 0);
 
   const handleBulkRevert = async (paymentIds: string[]) => {
-    if (window.confirm(`${t.common.confirm}: ${paymentIds.length} ${t.tenantProfile.revertPayment}?`)) {
-      await bulkUnmarkAsPaid(paymentIds);
-    }
+    setConfirmAction({
+      isOpen: true,
+      title: t.tenantProfile.revokeConsolidated || 'Revoke Payments',
+      message: `${t.common.confirm}: ${paymentIds.length} ${t.tenantProfile.revertPayment}?`,
+      confirmText: t.tenantProfile.revokePayment || 'Revoke',
+      onConfirm: async () => {
+        await bulkUnmarkAsPaid(paymentIds);
+        closeConfirm();
+      }
+    });
+  };
+
+  const handleClearCache = () => {
+    setConfirmAction({
+      isOpen: true,
+      title: t.tenantProfile.clearCache || 'Clear Cache',
+      message: t.tenantProfile.clearCache || 'Are you sure you want to clear this cache?',
+      confirmText: t.common.confirm || 'Confirm',
+      onConfirm: () => {
+        clearArchivalCache();
+        setSelectedYear(currentYear);
+        closeConfirm();
+      }
+    });
   };
 
   const cycleLabel = tenant.paymentCycle === 'monthly' ? t.tenants.monthly : 
@@ -392,12 +429,7 @@ export const TenantProfile: React.FC = () => {
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={() => {
-                if (window.confirm(t.tenantProfile.clearCache)) {
-                  clearArchivalCache();
-                  setSelectedYear(currentYear);
-                }
-              }}
+              onClick={handleClearCache}
               className="h-8 px-2 border-neutral-200 text-danger-600 hover:bg-danger-50"
               title={t.tenantProfile.clearCache}
             >
@@ -539,13 +571,20 @@ export const TenantProfile: React.FC = () => {
                           {isSplittable && (
                             <button
                               onClick={() => {
-                                if (window.confirm(t.tenantProfile.splitPrompt || "Split this block into monthly records?")) {
-                                  if (isGroup) {
-                                    handleBulkRevert(item.payments.map((p: Payment) => p.id));
-                                  } else {
-                                    splitPayment(payment.id);
+                                setConfirmAction({
+                                  isOpen: true,
+                                  title: t.tenantProfile.splitMonths || 'Split Block',
+                                  message: t.tenantProfile.splitPrompt || "Split this block into monthly records?",
+                                  confirmText: t.tenantProfile.splitMonths || 'Split',
+                                  onConfirm: () => {
+                                    if (isGroup) {
+                                      handleBulkRevert(item.payments.map((p: Payment) => p.id));
+                                    } else {
+                                      splitPayment(payment.id);
+                                    }
+                                    closeConfirm();
                                   }
-                                }
+                                });
                               }}
                               className="p-1 text-primary-400 hover:text-primary-600 hover:bg-primary-50 rounded transition-colors shrink-0"
                               title={t.tenantProfile.splitMonths || "Split Months"}
@@ -611,9 +650,16 @@ export const TenantProfile: React.FC = () => {
                                     if (isGroup) {
                                       handleBulkRevert(item.payments.map((p: Payment) => p.id));
                                     } else {
-                                      if (window.confirm(`${t.common.confirm}: ${t.tenantProfile.revokePayment}?`)) {
-                                        unmarkAsPaid(payment.id);
-                                      }
+                                      setConfirmAction({
+                                        isOpen: true,
+                                        title: t.tenantProfile.revokePayment || 'Revoke Payment',
+                                        message: `${t.common.confirm}: ${t.tenantProfile.revokePayment}?`,
+                                        confirmText: t.tenantProfile.revokePayment || 'Revoke',
+                                        onConfirm: () => {
+                                          unmarkAsPaid(payment.id);
+                                          closeConfirm();
+                                        }
+                                      });
                                     }
                                   }}
                                   className="h-7 w-7 rounded border border-neutral-100 bg-white text-neutral-400 hover:text-danger-600 shadow-sm flex items-center justify-center transition-all shrink-0"
@@ -772,6 +818,16 @@ export const TenantProfile: React.FC = () => {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={confirmAction.isOpen}
+        onCancel={closeConfirm}
+        onConfirm={confirmAction.onConfirm}
+        title={confirmAction.title}
+        message={confirmAction.message}
+        confirmText={confirmAction.confirmText}
+        cancelText={t.common.cancel || 'Cancel'}
+      />
     </div>
   );
 };

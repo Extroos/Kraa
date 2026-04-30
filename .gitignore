@@ -6,3 +6,11 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Debug/report artifacts
+*.backup.*
+build_log.txt
+report.txt
+deleted_logic.txt
+emergency_lint.txt
+lint_results.txt

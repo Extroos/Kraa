@@ -33,6 +33,7 @@ export interface PropertyFolder {
   name: string;
   ownerId: string;
   createdAt: string;
+  propertyIds: string[];
 }
 
 

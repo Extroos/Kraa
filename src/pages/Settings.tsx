@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { RefreshCw, WifiOff, Wifi, Globe, ShieldCheck } from 'lucide-react';
+import { RefreshCw, WifiOff, Wifi, Globe, ShieldCheck, History } from 'lucide-react';
 import { useAppContext } from '../hooks/useAppContext';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { Button } from '../components/ui';
@@ -84,8 +84,8 @@ export const Settings: React.FC = () => {
                 <p className="text-sm font-bold text-neutral-900 uppercase tracking-tight">
                   {isOnline ? t.settings.connected : t.settings.offline}
                 </p>
-                <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-wider mt-0.5">
-                  {isOnline ? 'System Live & Synchronized' : t.settings.offlineMessage}
+                <p className={`text-[10px] sm:text-xs font-black uppercase tracking-widest mt-1 sm:mt-1.5 ${isOnline ? 'text-emerald-600/80' : 'text-amber-500/80'}`}>
+                  {isOnline ? t.settings.systemLive || 'System Live & Synchronized' : t.settings.offlineMessage}
                 </p>
               </div>
             </div>
@@ -101,9 +101,12 @@ export const Settings: React.FC = () => {
                 </div>
                 <div className={isRTL ? 'text-right' : 'text-left'}>
                   <p className="text-sm font-bold text-neutral-900 uppercase tracking-tight">{t.settings.syncData}</p>
-                  <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-wider mt-0.5">
-                    {lastSyncTime ? `${t.settings.lastSynced} ${lastSyncTime}` : 'Manual Overwrite Synchronization'}
-                  </p>
+                  <div className="flex items-center gap-1.5 sm:gap-2 mt-1 sm:mt-1.5 text-neutral-400">
+                    <History size={12} className="sm:w-[14px] sm:h-[14px]" />
+                    <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest">
+                      {lastSyncTime ? `${t.settings.lastSynced} ${lastSyncTime}` : t.settings.manualOverwrite || 'Manual Overwrite Synchronization'}
+                    </span>
+                  </div>
                 </div>
               </div>
               <Button
